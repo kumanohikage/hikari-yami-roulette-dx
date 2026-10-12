@@ -1916,19 +1916,28 @@ $('cnt-reset').addEventListener('click', (e) => {
   resetArm = setTimeout(() => { resetArm = null; b.classList.remove('arm'); b.textContent = '↺'; }, 2500);
 });
 
+// OBS の「対話(操作)」窓から届くキーは e.code が空のことがあるので、e.key / keyCode でも判定する
+function keyName(e) {
+  if (e.code) return e.code;
+  const byKey = { ' ': 'Space', Spacebar: 'Space', Enter: 'Enter', Escape: 'Escape', Esc: 'Escape', 1: 'Digit1', 2: 'Digit2', h: 'KeyH', H: 'KeyH' };
+  const byCode = { 32: 'Space', 13: 'Enter', 27: 'Escape', 49: 'Digit1', 50: 'Digit2', 97: 'Numpad1', 98: 'Numpad2', 72: 'KeyH' };
+  return byKey[e.key] || byCode[e.keyCode] || '';
+}
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') {
+  const k = keyName(e);
+  if (k === 'Space' || k === 'Enter' || k === 'NumpadEnter') {
     e.preventDefault();
+    if (e.repeat) return;
     if (pushResolve) pushResolve();
     else if ($('result').classList.contains('show')) closeResult();
     else startSpin();
-  } else if (e.code === 'Escape') closeResult();
-  else if (e.code === 'Digit1' || e.code === 'Numpad1') setMode('light');
-  else if (e.code === 'Digit2' || e.code === 'Numpad2') setMode('dark');
-  else if (e.code === 'KeyH') document.body.classList.toggle('ui-hidden');
+  } else if (k === 'Escape') closeResult();
+  else if (k === 'Digit1' || k === 'Numpad1') setMode('light');
+  else if (k === 'Digit2' || k === 'Numpad2') setMode('dark');
+  else if (k === 'KeyH') document.body.classList.toggle('ui-hidden');
 });
 // ボタンにフォーカスが残ってSpaceで二重発火しないように
-document.querySelectorAll('button').forEach((b) => b.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'Enter') e.preventDefault(); }));
+document.querySelectorAll('button').forEach((b) => b.addEventListener('keydown', (e) => { const k = keyName(e); if (k === 'Space' || k === 'Enter') e.preventDefault(); }));
 window.addEventListener('resize', resize);
 
 /* ---------- 起動 ---------- */
