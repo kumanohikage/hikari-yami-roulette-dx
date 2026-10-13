@@ -1434,6 +1434,9 @@ function updateSwarm(dt) {
 /* ---------------------------------------------------------------------
  *  状態
  * ------------------------------------------------------------------- */
+// 下から湧く光の粒の量(演出の盛り上がりに合わせる)
+const AMB_IDLE = 0.15, AMB_SPIN = 0.5, AMB_WIN = 5;
+const ambForTier = (key) => 0.4 + TIERS[key].level * 0.5;
 let currentMode = 'light';
 let spinCount = 0;
 try { spinCount = Math.max(0, parseInt(localStorage.getItem('shogiRouletteSpins') || '0', 10) || 0); } catch (_) { /* 保存できない環境でも動く */ }
@@ -1452,7 +1455,7 @@ let time = 0;
 const fx = {
   reach: 0, reachT: 0, win: 0, winT: 0, dim: 0, dimT: 0, dark: 0,
   tier: new THREE.Color(1, 1, 1), tierKey: null,
-  bulb: 'idle', cam: 'base', shake: 0, faceGlow: 1, faceGlowT: 1, ambientRate: 1,
+  bulb: 'idle', cam: 'base', shake: 0, faceGlow: 1, faceGlowT: 1, ambientRate: AMB_IDLE, ambNow: AMB_IDLE,
 };
 
 function viewHalfHeight() {
@@ -1724,7 +1727,7 @@ async function startSpin() {
 
   if (plan.freeze) await freezeFx();
   fx.bulb = 'spin';
-  fx.ambientRate = 2.5;
+  fx.ambientRate = AMB_SPIN;
   sound.spinStart();
   flash(mode === 'light' ? '#fff6d0' : '#c084fc', 0.35, 0.35);
 
@@ -1777,7 +1780,7 @@ async function startSpin() {
       await gemChange(plan.hold);
       if (plan.vibe) { holdVibe = true; sound.buzz(); }
       await sleep(500);
-      fx.bulb = 'spin'; fx.ambientRate = 2.5;
+      fx.bulb = 'spin'; fx.ambientRate = AMB_SPIN;
       sound.spinStart();
       return runReach(plan, mode, isEnd, landAngle, null);
     }
@@ -1908,6 +1911,7 @@ async function runReach(plan, mode, isEnd, landAngle, prelude) {
 function setTier(key) {
   fx.tierKey = key;
   fx.tier.set(TIERS[key].hex);
+  fx.ambientRate = ambForTier(key);
 }
 
 async function finish(isEnd, mode, hadReach) {
@@ -1919,7 +1923,7 @@ async function finish(isEnd, mode, hadReach) {
   document.body.classList.remove('reaching');
 
   if (isEnd) {
-    fx.winT = 1; fx.bulb = 'win'; fx.dimT = 0; fx.faceGlowT = 2.2; fx.ambientRate = 4;
+    fx.winT = 1; fx.bulb = 'win'; fx.dimT = 0; fx.faceGlowT = 2.2; fx.ambientRate = AMB_WIN;
     sound.kyuin();
     setTimeout(() => sound.win(mode), 250);
     flash('#fff', 0.8, 1);
@@ -1930,7 +1934,7 @@ async function finish(isEnd, mode, hadReach) {
     setTimeout(() => { if (fx.winT) launchConfetti(mode, 150); }, 1900);
     await sleep(350);
   } else {
-    fx.bulb = 'idle'; fx.dimT = 0; fx.faceGlowT = 1; fx.ambientRate = 1;
+    fx.bulb = 'idle'; fx.dimT = 0; fx.faceGlowT = 1; fx.ambientRate = AMB_IDLE;
     if (hadReach) { sound.fail(); fx.dimT = 0.4; setTimeout(() => { fx.dimT = 0; }, 1600); }
     else sound.continueSE();
   }
@@ -1965,7 +1969,7 @@ function closeResult() {
   const res = $('result');
   if (!res.classList.contains('show')) return;
   res.classList.remove('show');
-  fx.winT = 0; fx.bulb = 'idle'; fx.cam = 'base'; fx.faceGlowT = 1; fx.ambientRate = 1;
+  fx.winT = 0; fx.bulb = 'idle'; fx.cam = 'base'; fx.faceGlowT = 1; fx.ambientRate = AMB_IDLE;
   setHold('blue');
 }
 
@@ -2068,16 +2072,18 @@ function tierBulb(c, i) {
 const AMB = { light: new THREE.Color(2.4, 1.7, 0.6), red: new THREE.Color(2.4, 0.2, 0.5), dark: new THREE.Color(1.3, 0.4, 2.6) };
 const ptrPos = new THREE.Vector3(), reachCol = new THREE.Color(), shakeV = new THREE.Vector3(), camDir = new THREE.Vector3();
 function emitAmbient(dt) {
-  const rate = 26 * fx.ambientRate;
+  // 急に増減しないよう、なめらかに追従させる
+  fx.ambNow += (fx.ambientRate * (pushResolve ? 1.6 : 1) - fx.ambNow) * (1 - Math.exp(-dt * 2.5));
+  const rate = 26 * fx.ambNow;
   let n = rate * dt; const vw = viewHalfWidth();
   while (n > 0) {
     if (Math.random() < n) {
       if (currentMode === 'light') {
-        sparks.emit(rand(-vw, vw), -viewHalfHeight() * 1.3, rand(-6, 3), rand(-0.3, 0.3), rand(1, 2.6), 0,
+        sparks.emit(camLook.x + rand(-vw, vw), camLook.y - viewHalfHeight() * 1.3, rand(-6, 3), rand(-0.3, 0.3), rand(1, 2.6), 0,
           AMB.light, rand(0.12, 0.32), rand(5, 9), 0, 1);
       } else {
         const red = Math.random() < 0.2;
-        sparks.emit(rand(-vw, vw), -viewHalfHeight() * 1.3, rand(-6, 3), rand(-0.5, 0.5), rand(0.8, 2.2), 0,
+        sparks.emit(camLook.x + rand(-vw, vw), camLook.y - viewHalfHeight() * 1.3, rand(-6, 3), rand(-0.5, 0.5), rand(0.8, 2.2), 0,
           red ? AMB.red : AMB.dark, rand(0.1, 0.3), rand(5, 9), 0, 1);
       }
     }
