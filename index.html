@@ -671,7 +671,7 @@ const chance = (p) => Math.random() < p;
 
 function planPresentation(isEnd, mode) {
   if (isEnd && chance(FREEZE_RATE)) {
-    return { freeze: true, tier: 'rainbow', reachPath: ['rainbow'], pattern: 'straight', steps: 0, pseudo: 0, swarm: false, hold: 'rainbow', vibe: false, gimmick: false, gekiatsu: false, gemEvents: [{ at: 'start', kind: 'change', to: 'rainbow' }] };
+    return { freeze: true, tier: 'rainbow', reachPath: ['rainbow'], pattern: 'straight', steps: 0, pseudo: 0, swarm: false, hold: 'rainbow', vibe: false, gimmick: false, gekiatsu: false, mash: true, gemEvents: [{ at: 'start', kind: 'change', to: 'rainbow' }] };
   }
   // 再始動: いったんリーチなしで継続に止まり、フリーズ → 宝石が化ける → もう一度回ってリーチ
   const restart = chance(isEnd ? RESTART_RATE.end : RESTART_RATE.cont);
@@ -714,7 +714,7 @@ function planPresentation(isEnd, mode) {
     hold = chance(0.55) ? allowed[allowed.length - 1] : allowed[Math.floor(Math.random() * allowed.length)];
   }
   const vibe = tier ? chance(isEnd ? 0.15 : 0.01) : false; // ブルブル
-  const mash = lv >= 4 && chance(0.3);                      // PUSH が連打になる
+  const mash = tier === 'rainbow' || (lv >= 4 && chance(0.3)); // PUSH が連打になる(虹は必ず)
 
   // 宝石の色が変わるタイミング(熱い色ほど遅め)と、変わらない煽り
   const gemEvents = [];
