@@ -49,6 +49,10 @@
   body.ui-hidden #ui { opacity: 0; pointer-events: none; }
   body.ui-hidden #ui > * { pointer-events: none; }
   body.spinning #tabs, body.spinning #btn-spin { opacity: .25; pointer-events: none; }
+  /* リーチ中は UI をフェードで消し、終わったらフェードで戻す */
+  #counter { transition: opacity .6s; }
+  body.reaching #ui, body.reaching #counter { opacity: 0; pointer-events: none; transition: opacity .6s; }
+  body.reaching #ui > * { pointer-events: none; }
 
   header {
     position: absolute; top: 12px; left: 16px; right: 16px;
@@ -1633,6 +1637,7 @@ async function startSpin() {
   await prelude;
   setTier(plan.tier);
   fx.reachT = 1; fx.bulb = 'reach'; fx.cam = 'reach'; fx.faceGlowT = 1.6;
+  document.body.classList.add('reaching');
   vignette(tier.hex, true);
   const hb = setInterval(() => sound.heartbeat(), 820);
   if (plan.gimmick) { dropGimmick(); await sleep(1000); }
@@ -1691,6 +1696,7 @@ async function finish(isEnd, mode, hadReach) {
   fx.reachT = 0; fx.cam = isEnd ? 'win' : 'base';
   vignette(null, false);
   holdVibe = false;
+  document.body.classList.remove('reaching');
 
   if (isEnd) {
     fx.winT = 1; fx.bulb = 'win'; fx.dimT = 0; fx.faceGlowT = 2.2; fx.ambientRate = 4;
