@@ -255,7 +255,8 @@
   #steps { position: fixed; left: 0; right: 0; top: 50%; transform: translateY(-50%); display: flex; justify-content: center; align-items: flex-end; gap: calc(1.4 * var(--vw)); z-index: 41; pointer-events: none; }
   #steps.out { animation: stepsOut .35s ease-in forwards; }
   @keyframes stepsOut { to { opacity: 0; transform: translateY(-50%) scale(1.25); } }
-  .komaw { animation: komaIn .32s cubic-bezier(.3,1.6,.5,1) both; filter: drop-shadow(0 0 16px var(--gl)) drop-shadow(0 6px 0 rgba(0,0,0,.5)); }
+  /* 影(発光)が箱の外に出ると iPhone の Safari では動いている間に切れて見えるので、余白で箱を広げておく */
+  .komaw { padding: 28px; margin: -28px; animation: komaIn .32s cubic-bezier(.3,1.6,.5,1) both; filter: drop-shadow(0 0 16px var(--gl)) drop-shadow(0 6px 0 rgba(0,0,0,.5)); }
   .koma {
     --s: min(calc(13 * var(--vh)), calc(11 * var(--vw))); width: var(--s); height: calc(var(--s) * 1.18); padding: 7px; box-sizing: border-box;
     background: var(--fr); clip-path: polygon(50% 0, 88% 20%, 100% 100%, 0 100%, 12% 20%);
