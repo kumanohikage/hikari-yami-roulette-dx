@@ -173,21 +173,6 @@
   .t-plain  { --band: transparent; --txt: linear-gradient(#aaa,#666); --glow: transparent; }
   .t-plain .band { display: none; }
 
-  /* PUSH button */
-  #push {
-    position: fixed; right: calc(7 * var(--vw)); bottom: calc(12 * var(--vh)); transform: scale(0);
-    width: min(calc(26 * var(--vh)), 200px); height: min(calc(26 * var(--vh)), 200px); border-radius: 50%; z-index: 55;
-    border: 6px solid #fff; cursor: pointer; pointer-events: none;
-    font-family: var(--heavy); font-size: min(calc(7 * var(--vh)), 52px); color: #fff; letter-spacing: .04em;
-    background: radial-gradient(circle at 35% 30%, #ff9a9a, #ff1f1f 45%, #8a0000);
-    box-shadow: 0 0 40px #ff2a2a, 0 12px 0 #5a0000, inset 0 -10px 20px rgba(0,0,0,.4);
-    text-shadow: 0 3px 0 rgba(0,0,0,.4);
-    transition: transform .25s cubic-bezier(.3,1.8,.5,1);
-  }
-  #push.show { transform: scale(1); pointer-events: auto; animation: pushPulse .35s ease-in-out infinite alternate; }
-  #push.rainbow { background: conic-gradient(#ff2a2a,#ffb800,#3dff5a,#22c6ff,#7a5cff,#ff3df2,#ff2a2a); }
-  #push.gold { background: radial-gradient(circle at 35% 30%, #fff3b0, #ffc400 45%, #8a5a00); box-shadow: 0 0 40px #ffcc33, 0 12px 0 #5a3a00; }
-  @keyframes pushPulse { to { transform: scale(1.09); } }
 
   /* Result */
   #result { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; cursor: pointer; }
@@ -268,8 +253,6 @@
   .f-rainbow { --fr: linear-gradient(135deg, #ff2a2a, #ffb800, #3dff5a, #22c6ff, #7a5cff, #ff3df2); --gl: #fff; }
 
   /* PUSH の種類 */
-  #push.zebra { background: repeating-linear-gradient(120deg, #111 0 16px, #fff 16px 32px); box-shadow: 0 0 40px #fff, 0 12px 0 #333; }
-  #push.show.vibe { animation: vibe .05s linear infinite; }
 
   /* 回転数(データカウンター風) */
   #counter {
@@ -300,7 +283,81 @@
   body.vertical #btn-spin { bottom: calc(25 * var(--vh) + 8px); font-size: 64px; padding: 26px 120px; border-width: 5px; }
   body.vertical #btn-spin:active { transform: translateX(-50%) scale(.95); }
   body.vertical #hint { bottom: calc(25 * var(--vh) - 22px); font-size: 14px; }
-  body.vertical #push { right: calc(4 * var(--vw)); bottom: calc(27 * var(--vh)); }
+  body.vertical #push { bottom: calc(25 * var(--vh) + 10px); }
+
+  /* PUSH: 斜めから見た本物のボタン(銀の縁・透けたドーム・厚み) + 「ボタンを押せ!!」 + 背後の放射光 */
+  #push {
+    position: absolute; left: 50%; bottom: 24px; width: 1000px; height: 600px; margin-left: -500px; z-index: 55;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    pointer-events: none; opacity: 0; transform: scale(.5); transition: opacity .15s, transform .35s cubic-bezier(.3,1.7,.5,1);
+    --d1: #ff8a8a; --d2: #e00000; --d3: #5a0000; --glow: #ff2a2a; --ray: rgba(255,70,40,.55);
+  }
+  #push.show { opacity: 1; transform: scale(1); pointer-events: auto; }
+  #push.gold { --d1: #fff6b0; --d2: #ffb000; --d3: #6a3a00; --glow: #ffcc33; --ray: rgba(255,210,80,.6); }
+  #push.zebra { --glow: #fff; --ray: rgba(255,255,255,.55); }
+  #push.rainbow { --glow: #fff; --ray: rgba(255,255,255,.6); }
+  #push .pburst {
+    position: absolute; left: 50%; bottom: 150px; width: 1100px; height: 1100px; margin: 0 0 -550px -550px; border-radius: 50%;
+    background: repeating-conic-gradient(transparent 0 9deg, var(--ray) 9deg 14deg);
+    -webkit-mask-image: radial-gradient(circle, #000 12%, transparent 62%); mask-image: radial-gradient(circle, #000 12%, transparent 62%);
+    animation: pspin 7s linear infinite; pointer-events: none;
+  }
+  #push.rainbow .pburst { background: repeating-conic-gradient(#ff3b3b88 0 5deg, transparent 5deg 10deg, #ffd84d88 10deg 15deg, transparent 15deg 20deg, #4dd8ff88 20deg 25deg, transparent 25deg 30deg); }
+  @keyframes pspin { to { transform: rotate(360deg); } }
+  #push .ptext { position: relative; width: 900px; margin-bottom: -10px; transform-origin: 50% 100%; }
+  #push.show .ptext { animation: ptextIn .45s cubic-bezier(.2,1.6,.4,1) both, ptextBeat .5s ease-in-out .45s infinite alternate; }
+  #push .ptext .glw canvas { filter: drop-shadow(0 0 18px var(--glow)); }
+  @keyframes ptextIn { 0% { transform: translateY(-260px) scale(1.6) rotate(-6deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  @keyframes ptextBeat { to { transform: scale(1.05) rotate(-1deg); } }
+  #push .pbtn {
+    position: relative; width: 300px; height: 300px; border: 0; padding: 0; background: none; cursor: pointer; outline: none;
+    transform: perspective(900px) rotateX(32deg); animation: pbeat .42s ease-in-out infinite alternate;
+  }
+  @keyframes pbeat { to { transform: perspective(900px) rotateX(32deg) scale(1.06); } }
+  #push .pbtn > span { position: absolute; border-radius: 50%; pointer-events: none; }
+  #push .pring { inset: -6px; border: 8px solid var(--glow); box-shadow: 0 0 30px var(--glow); animation: pring 1s ease-out infinite; opacity: 0; }
+  #push .pring.r2 { animation-delay: .5s; }
+  @keyframes pring { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.9); opacity: 0; } }
+  #push .pbase { inset: 0; transform: translateY(30px); background: linear-gradient(90deg, #1a1a20, #55555f 30%, #2a2a32 60%, #0e0e12); box-shadow: 0 18px 30px rgba(0,0,0,.6); }
+  #push .pbezel {
+    inset: 0; background: conic-gradient(from 210deg, #fff, #8d8d9c, #f6f6fa, #4e4e5c, #fff, #a0a0b0, #fff);
+    box-shadow: 0 0 0 5px #0c0c10, 0 0 70px var(--glow), inset 0 0 0 5px rgba(0,0,0,.6);
+  }
+  #push .pdome {
+    inset: 24px;
+    background:
+      radial-gradient(ellipse 58% 40% at 50% 24%, rgba(255,255,255,.95), rgba(255,255,255,0) 62%),
+      radial-gradient(ellipse 70% 30% at 50% 88%, rgba(255,255,255,.35), rgba(255,255,255,0) 70%),
+      radial-gradient(circle at 50% 58%, var(--d1), var(--d2) 55%, var(--d3) 100%);
+    box-shadow: inset 0 -22px 34px rgba(0,0,0,.5), inset 0 10px 18px rgba(255,255,255,.35), 0 0 34px var(--glow);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #push.zebra .pdome {
+    background:
+      radial-gradient(ellipse 58% 40% at 50% 24%, rgba(255,255,255,.85), rgba(255,255,255,0) 62%),
+      radial-gradient(circle at 50% 60%, transparent 55%, rgba(0,0,0,.55)),
+      repeating-linear-gradient(120deg, #111 0 22px, #f4f4f4 22px 44px);
+  }
+  #push.rainbow .pdome {
+    background:
+      radial-gradient(ellipse 58% 40% at 50% 24%, rgba(255,255,255,.9), rgba(255,255,255,0) 62%),
+      radial-gradient(circle at 50% 60%, transparent 50%, rgba(0,0,0,.45)),
+      conic-gradient(#ff3b3b, #ffcc00, #4dff6a, #33d6ff, #8a6bff, #ff4de6, #ff3b3b);
+  }
+  #push.rainbow .pdome b { animation: hue 1.2s linear infinite; }
+  #push .pdome b {
+    font: normal 72px var(--heavy); color: #fff; letter-spacing: .02em; margin-top: 6px;
+    -webkit-text-stroke: 3px rgba(60,0,0,.7); text-shadow: 0 4px 0 rgba(0,0,0,.35), 0 0 18px rgba(255,255,255,.6);
+  }
+  #push.gold .pdome b { -webkit-text-stroke-color: rgba(90,50,0,.8); }
+  #push.zebra .pdome b, #push.rainbow .pdome b { -webkit-text-stroke-color: #000; }
+  /* 押した瞬間: 沈む → 光る */
+  #push.pressed .pbtn { animation: none; transform: perspective(900px) rotateX(32deg) translateY(14px) scale(.94); transition: transform .06s; }
+  #push.pressed .pdome { filter: brightness(1.9); }
+  #push.hit .pbtn { animation: phit .12s ease-out; }
+  @keyframes phit { 50% { transform: perspective(900px) rotateX(32deg) translateY(12px) scale(.95); } }
+  #push.vibe { animation: pvibe .05s linear infinite; }
+  @keyframes pvibe { 25% { margin-left: -505px; margin-top: 2px; } 75% { margin-left: -495px; margin-top: -2px; } }
 
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 700 16px sans-serif; z-index: 100; background: #000; }
   #loading.err { color: #fca5a5; padding: 24px; text-align: center; line-height: 1.7; }
@@ -348,7 +405,11 @@
     <button id="cnt-reset" title="0に戻す(2回押し)">↺</button>
   </div>
 </div>
-<button id="push">PUSH!</button>
+<div id="push">
+  <div class="pburst"></div>
+  <div class="ptext"></div>
+  <button class="pbtn" aria-label="PUSH"><span class="pring"></span><span class="pring r2"></span><span class="pbase"></span><span class="pbezel"></span><span class="pdome"><b>PUSH</b></span></button>
+</div>
 <div id="result">
   <div class="rbg"></div>
   <div id="result-text">配信継続！</div>
@@ -613,8 +674,9 @@ function planPresentation(isEnd, mode) {
     hold = chance(0.55) ? allowed[allowed.length - 1] : allowed[Math.floor(Math.random() * allowed.length)];
   }
   const vibe = tier ? chance(isEnd ? 0.15 : 0.01) : false; // ブルブル
+  const mash = lv >= 4 && chance(0.3);                      // PUSH が連打になる
 
-  return { freeze: false, tier, pattern, steps, pseudo, swarm, hold, vibe, gimmick, gekiatsu };
+  return { freeze: false, tier, pattern, steps, pseudo, swarm, hold, vibe, gimmick, gekiatsu, mash };
 }
 
 /* ---------- つるつる文字(パチンコ文字風 SVG) ---------- */
@@ -729,7 +791,8 @@ function glossy(text, scheme) {
 // 使う文字は決まっているので、起動後に少しずつ先に作っておく
 function warmGlossy() {
   const jobs = [['光リーチ', 'red'], ['光リーチ', 'gold'], ['光リーチ', 'rainbow'], ['闇リーチ', 'red'], ['闇リーチ', 'gold'], ['闇リーチ', 'rainbow'],
-    ['激熱', 'red'], ['配信終了！', 'gold'], ['配信終了！', 'purple']];
+    ['激熱', 'red'], ['配信終了！', 'gold'], ['配信終了！', 'purple'],
+    ['ボタンを押せ!!', 'red'], ['ボタンを押せ!!', 'gold'], ['ボタンを押せ!!', 'rainbow'], ['ボタンを連打!!', 'gold'], ['ボタンを連打!!', 'rainbow']];
   const next = () => { const j = jobs.shift(); if (!j) return; getGlossy(...j); setTimeout(next, 60); };
   setTimeout(next, 300);
 }
@@ -1318,18 +1381,39 @@ function vignette(color, on) {
 }
 
 let pushResolve = null;
-function waitPush(tierKey, vibe, timeout = 3500) {
-  const btn = $('push');
-  btn.className = ['rainbow', 'gold', 'zebra'].includes(tierKey) ? tierKey : '';
-  void btn.offsetWidth;
-  btn.classList.add('show');
-  if (vibe) btn.classList.add('vibe');
+// 一撃(1回押す) か 連打(何回か押す)。押さなくても時間で進む
+function waitPush(tierKey, vibe, mash = false, timeout = mash ? 4500 : 3500) {
+  const el = $('push');
+  const cls = ['rainbow', 'gold', 'zebra'].includes(tierKey) ? tierKey : 'red';
+  el.className = cls + (mash ? ' mash' : '');
+  const scheme = { red: 'red', gold: 'gold', zebra: 'gold', rainbow: 'rainbow' }[cls];
+  const tx = el.querySelector('.ptext');
+  tx.textContent = '';
+  tx.appendChild(glossy(mash ? 'ボタンを連打!!' : 'ボタンを押せ!!', scheme));
+  void el.offsetWidth;
+  el.classList.add('show');
+  if (vibe) el.classList.add('vibe');
   sound.pushPrompt();
   const bz = vibe ? setInterval(() => sound.buzz(), 750) : null;
   if (vibe) sound.buzz();
+  let need = mash ? 6 : 1;
   return new Promise((resolve) => {
-    const timer = setTimeout(() => pushResolve && pushResolve(), timeout);
-    pushResolve = () => { clearTimeout(timer); clearInterval(bz); pushResolve = null; btn.classList.remove('show', 'vibe'); resolve(); };
+    const finish = () => {
+      clearTimeout(timer); clearInterval(bz); pushResolve = null;
+      el.classList.remove('vibe'); el.classList.add('pressed');
+      setTimeout(() => { el.classList.remove('show'); }, 180);
+      setTimeout(() => { el.className = ''; resolve(); }, 330);
+    };
+    const timer = setTimeout(finish, timeout);
+    pushResolve = () => {
+      need--;
+      if (need > 0) {
+        sound.tick(1.3); fx.shake = Math.max(fx.shake, 0.25);
+        el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit');
+        return;
+      }
+      finish();
+    };
   });
 }
 
@@ -1550,7 +1634,7 @@ async function startSpin() {
   fx.bulb = 'hold';
   tremble = Math.min(0.12 * arc, 0.01);
 
-  if (tier.level >= 3) await waitPush(plan.tier, plan.vibe);
+  if (tier.level >= 3) await waitPush(plan.tier, plan.vibe, plan.mash);
   else await sleep(900);
   clearInterval(hb);
   tremble = 0;
@@ -1882,7 +1966,7 @@ function resize() {
 $('tab-light').addEventListener('click', () => setMode('light'));
 $('tab-dark').addEventListener('click', () => setMode('dark'));
 $('btn-spin').addEventListener('click', startSpin);
-$('push').addEventListener('click', () => pushResolve && pushResolve());
+$('push').querySelector('.pbtn').addEventListener('click', () => pushResolve && pushResolve());
 $('result').addEventListener('click', closeResult);
 $('result-x').addEventListener('click', (e) => { e.stopPropagation(); closeResult(); });
 
@@ -1949,7 +2033,7 @@ window.addEventListener('resize', resize);
 (async () => {
   try {
     await Promise.race([
-      Promise.all([document.fonts.load(`100px 'Dela Gothic One'`, '終了継続光闇配信！リーチ激熱×234'), document.fonts.load(`900 100px 'Noto Sans JP'`, '王飛角金銀桂香歩龍馬')]),
+      Promise.all([document.fonts.load(`100px 'Dela Gothic One'`, '終了継続光闇配信！リーチ激熱×234ボタンを押せ連打!'), document.fonts.load(`900 100px 'Noto Sans JP'`, '王飛角金銀桂香歩龍馬')]),
       sleep(2500),
     ]);
   } catch (_) { /* フォント無しでも続行 */ }
