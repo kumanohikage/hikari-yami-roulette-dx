@@ -1677,9 +1677,6 @@ async function startSpin() {
       fx.bulb = 'off'; fx.dimT = 0.8; fx.ambientRate = 0;
       await sleep(700);
       sound.gata(); flash('#fff', 0.6, 1); fx.shake = 1;
-    } else {
-      // 普通に止まったときも一瞬の間(再始動と見分けがつかないように)
-      await sleep(800);
     }
     return finish(isEnd, mode, false);
   }
