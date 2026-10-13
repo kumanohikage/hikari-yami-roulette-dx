@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>光と闇のルーレットDX</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -420,6 +420,17 @@
   #pv .go { width: 100%; margin-top: 8px; padding: 9px 0; border-radius: 9px; border: 0; cursor: pointer; font: 900 15px 'Noto Sans JP', sans-serif; color: #fff; background: linear-gradient(#f59e0b, #ea580c); }
   #pv .note { font-weight: 400; font-size: 10.5px; color: #aaa; line-height: 1.5; margin-top: 6px; }
 
+  /* スマホ・タブレット(タッチ操作): 縮みすぎる UI を読める大きさに戻し、配信用の部品は隠す */
+  body.touch header, body.touch #tabs, body.touch #counter, body.touch #credit { zoom: var(--uiz, 1); }
+  body.touch:not(.vertical) #btn-spin { zoom: var(--uiz, 1); }
+  body.touch #btn-greenscreen, body.touch #btn-win-h, body.touch #btn-win-v, body.touch #btn-hide, body.touch #hint { display: none; }
+  body.touch header { flex-wrap: nowrap; }
+  body.touch #app-title { font-size: 14px; padding: 5px 10px; white-space: nowrap; }
+  body.touch #counter { top: 140px; }
+  body.touch:not(.vertical) #counter { top: 52px; }
+  body.touch:not(.vertical) #tabs { top: 12px; }
+  #safe-probe { position: fixed; bottom: 0; height: 0; padding-bottom: env(safe-area-inset-bottom, 0px); visibility: hidden; pointer-events: none; }
+
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 700 16px sans-serif; z-index: 100; background: #000; }
   #loading.err { color: #fca5a5; padding: 24px; text-align: center; line-height: 1.7; }
 </style>
@@ -478,6 +489,7 @@
 </div>
 <div id="flash"></div>
 </div>
+<div id="safe-probe"></div>
 <div id="loading">読み込み中…</div>
 
 <script type="module">
@@ -2239,17 +2251,23 @@ function previewPlan(isEnd, mode) {
 
 const forcedLayout = new URLSearchParams(location.search).get('layout');
 let vertical = false, safeArea = false;
+const TOUCH = matchMedia('(hover: none) and (pointer: coarse)').matches;
+if (TOUCH) document.body.classList.add('touch');
 function layoutStage() {
+  const st = $('stage');
   const ww = window.innerWidth, wh = window.innerHeight;
   vertical = forcedLayout === 'vertical' ? true : forcedLayout === 'horizontal' ? false : wh > ww;
   const fixed = forcedLayout === 'vertical' || forcedLayout === 'horizontal';
   const bw = vertical ? 1080 : 1920, bh = vertical ? 1920 : 1080;
   const sc = Math.min(ww / bw, wh / bh);
   // 固定: 16:9 / 9:16 の舞台に黒帯。自由: 窓いっぱい(部品の大きさの基準だけ揃える)
-  const sw = fixed ? bw : ww / sc, sh = fixed ? bh : wh / sc;
+  // iPhone のホームバーなど画面下の安全領域ぶん、UI(舞台)だけ上に詰める(ルーレットの絵は画面いっぱいのまま)
+  const inset = fixed ? 0 : $('safe-probe').offsetHeight;
+  const sw = fixed ? bw : ww / sc, sh = fixed ? bh : (wh - inset) / sc;
   const w = fixed ? Math.round(sw * sc) : ww, h = fixed ? Math.round(sh * sc) : wh;
+  // タッチ端末では UI の実寸がおよそ等倍になるように拡大(縮みすぎ対策)
+  st.style.setProperty('--uiz', TOUCH ? Math.min(3.2, Math.max(1, (vertical ? 0.74 : 0.58) / sc)).toFixed(3) : '1');
   const x = Math.floor((ww - w) / 2), y = Math.floor((wh - h) / 2);
-  const st = $('stage');
   st.style.width = `${sw}px`; st.style.height = `${sh}px`;
   st.style.setProperty('--vw', `${sw / 100}px`); st.style.setProperty('--vh', `${sh / 100}px`);
   st.style.transform = `translate(${x}px, ${y}px) scale(${sc})`;
