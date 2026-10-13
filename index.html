@@ -678,11 +678,25 @@ class SoundEngine {
     this.tone(900, { type: 'square', dur: 0.05, g: 0.07, f2: 420 });
     this.noise({ dur: 0.06, g: 0.2, f: 2500, q: 1.2 });
   }
+  // 余韻が自然に消える鐘の音(急に切れて聞こえないように)
+  bell(f, { at = 0, g = 0.12, decay = 0.25, type = 'triangle' } = {}) {
+    const c = this.ctx, t = c.currentTime + at;
+    const o = c.createOscillator(), gn = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    gn.gain.setValueAtTime(0.0001, t);
+    gn.gain.linearRampToValueAtTime(g, t + 0.006);
+    gn.gain.setTargetAtTime(0, t + 0.02, decay);
+    o.connect(gn); gn.connect(this.master);
+    o.start(t); o.stop(t + 0.02 + decay * 7);
+  }
   continueSE() {
     if (!this.ready()) return;
-    this.tone(200, { dur: 0.4, g: 0.3, f2: 60 });
-    this.tone(660, { type: 'triangle', dur: 0.35, g: 0.12, f2: 330 });
-    this.tone(990, { type: 'sine', dur: 0.25, g: 0.05, f2: 495 });
+    this.tone(180, { dur: 0.35, g: 0.16, f2: 70 });
+    // 「ポロン」: ミ → ド と下がる2音
+    this.bell(659.25, { g: 0.13, decay: 0.22 });
+    this.bell(1318.5, { g: 0.035, decay: 0.12, type: 'sine' });
+    this.bell(523.25, { at: 0.11, g: 0.14, decay: 0.3 });
+    this.bell(1046.5, { at: 0.11, g: 0.04, decay: 0.16, type: 'sine' });
   }
   fail() {
     if (!this.ready()) return;
@@ -1760,7 +1774,8 @@ async function startSpin() {
       const lead = r < 0.5 ? 0 : r < 0.85 ? rand(0.1, 0.2) : rand(0.4, 0.6);
       await sleep(SPIN_TIME * 1000 - lead * 1000);
       await prelude;
-      spun.then(() => sound.stopThud());
+      // 結果が先に出たときは、あとから停止音を鳴らさない(結果の音に割り込んで途切れて聞こえるため)
+      if (!lead) spun.then(() => sound.stopThud());
       return finish(isEnd, mode, false);
     }
     await spun;
