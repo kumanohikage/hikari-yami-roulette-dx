@@ -277,13 +277,25 @@
     color: rgba(255,255,255,.75); text-shadow: 0 1px 2px #000; text-decoration: none;
   }
   #credit:hover { color: #fff; text-decoration: underline; }
-  body.vertical #fx, body.vertical #result { bottom: calc(25 * var(--vh)); height: auto; }
-  body.vertical #result .rbg { bottom: calc(-25 * var(--vh)); }
-  body.vertical #steps { top: calc(37.5 * var(--vh)); }
-  body.vertical #btn-spin { bottom: calc(25 * var(--vh) + 8px); font-size: 64px; padding: 26px 120px; border-width: 5px; }
+  body.safe #fx, body.safe #result { bottom: calc(25 * var(--vh)); height: auto; }
+  body.safe #result .rbg { bottom: calc(-25 * var(--vh)); }
+  body.safe #steps { top: calc(37.5 * var(--vh)); }
+  body.vertical #btn-spin { bottom: 60px; font-size: 64px; padding: 26px 120px; border-width: 5px; }
   body.vertical #btn-spin:active { transform: translateX(-50%) scale(.95); }
-  body.vertical #hint { bottom: calc(25 * var(--vh) - 22px); font-size: 14px; }
-  body.vertical #push { bottom: calc(25 * var(--vh) + 10px); }
+  body.vertical #hint { bottom: 30px; font-size: 14px; }
+  body.vertical #push { bottom: 200px; }
+  body.safe #btn-spin { bottom: calc(25 * var(--vh) + 8px); }
+  body.safe #hint { bottom: calc(25 * var(--vh) - 22px); }
+  body.safe #push { bottom: calc(25 * var(--vh) + 10px); }
+  /* 縦では文字を大きく(スマホで小さくならないように) */
+  body.vertical .cutin .main { font-size: calc(19 * var(--vw)); }
+  body.vertical .cutin.small .main { font-size: calc(15 * var(--vw)); }
+  body.vertical .cutin .main.gl .glw { width: calc(96 * var(--vw)); }
+  body.vertical .cutin.small .main.gl .glw { width: calc(70 * var(--vw)); }
+  body.vertical .cutin .band { height: calc(24 * var(--vh)); margin-top: calc(-12 * var(--vh)); }
+  body.vertical .cutin.small .band { height: calc(14 * var(--vh)); margin-top: calc(-7 * var(--vh)); }
+  body.vertical #result-text.gl .glw { width: calc(96 * var(--vw)); }
+  body.vertical #result-text { font-size: calc(17 * var(--vw)); }
 
   /* PUSH: 斜めから見た本物のボタン(銀の縁・透けたドーム・厚み) + 「ボタンを押せ!!」 + 背後の放射光 */
   #push {
@@ -822,7 +834,8 @@ const tierLight = new THREE.PointLight(0xffffff, 0, 40, 1.2);
 tierLight.position.set(0, 1, 16);
 scene.add(ambient, keyLight, tierLight);
 
-const composer = new EffectComposer(renderer);
+// antialias:true はコンポーザー経由だと効かないので、描画先そのものを MSAA(4x) にする
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
 composer.addPass(new RenderPass(scene, camera));
 // UnrealBloomPass は透過アルファを壊すので、ブルーム前の画を保存しておき後で復元する
 const savePass = new SavePass(new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
@@ -1770,7 +1783,8 @@ const tmpV = new THREE.Vector3(), tmpL = new THREE.Vector3();
 function baseCamDist() {
   const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
   const half = R + 1.3;
-  if (vertical) return Math.max(half / (0.75 * 0.82) / t, half / 0.9 / (t * camera.aspect));
+  if (safeArea) return Math.max(half / (0.75 * 0.82) / t, half / 0.9 / (t * camera.aspect));
+  if (vertical) return Math.max(half / 0.8 / t, half / 0.94 / (t * camera.aspect));
   return Math.max(half / 0.7 / t, half / 0.92 / (t * camera.aspect));
 }
 function camTarget(out, look) {
@@ -1931,13 +1945,16 @@ function frame(now) {
 
 // ?layout=vertical / ?layout=horizontal で固定。無ければ窓の形で自動
 const forcedLayout = new URLSearchParams(location.search).get('layout');
-let vertical = false;
+let vertical = false, safeArea = false;
 function layoutStage() {
   const ww = window.innerWidth, wh = window.innerHeight;
   vertical = forcedLayout === 'vertical' ? true : forcedLayout === 'horizontal' ? false : wh > ww;
-  const sw = vertical ? 1080 : 1920, sh = vertical ? 1920 : 1080;
-  const sc = Math.min(ww / sw, wh / sh);
-  const w = Math.round(sw * sc), h = Math.round(sh * sc);
+  const fixed = forcedLayout === 'vertical' || forcedLayout === 'horizontal';
+  const bw = vertical ? 1080 : 1920, bh = vertical ? 1920 : 1080;
+  const sc = Math.min(ww / bw, wh / bh);
+  // 固定: 16:9 / 9:16 の舞台に黒帯。自由: 窓いっぱい(部品の大きさの基準だけ揃える)
+  const sw = fixed ? bw : ww / sc, sh = fixed ? bh : wh / sc;
+  const w = fixed ? Math.round(sw * sc) : ww, h = fixed ? Math.round(sh * sc) : wh;
   const x = Math.floor((ww - w) / 2), y = Math.floor((wh - h) / 2);
   const st = $('stage');
   st.style.width = `${sw}px`; st.style.height = `${sh}px`;
@@ -1945,6 +1962,8 @@ function layoutStage() {
   st.style.transform = `translate(${x}px, ${y}px) scale(${sc})`;
   Object.assign(canvas.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
   document.body.classList.toggle('vertical', vertical);
+  document.body.classList.toggle('safe', vertical && fixed);
+  safeArea = vertical && fixed;
   return { w, h };
 }
 
@@ -1954,7 +1973,7 @@ function resize() {
   composer.setSize(w, h);
   camera.aspect = w / h;
   // 縦: 盤を上 75% の中央(=上から 37.5%)に寄せる。下はチャットが重なる余白
-  if (vertical) camera.setViewOffset(w, h, 0, h * 0.125, w, h); else camera.clearViewOffset();
+  if (safeArea) camera.setViewOffset(w, h, 0, h * 0.125, w, h); else camera.clearViewOffset();
   camera.updateProjectionMatrix();
   bgUniforms.uAspect.value = w / h;
   sparks.uniforms.uScale.value = (h * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
