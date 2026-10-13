@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>光と闇のルーレットDX</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,7 +36,11 @@
     font-family: 'Noto Sans JP', system-ui, sans-serif;
     user-select: none; -webkit-user-select: none;
     color: var(--ui-fg);
+    /* スマホ: ダブルタップ拡大・タップの青いハイライト・長押しメニュー・引っ張り更新を止める */
+    touch-action: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; overscroll-behavior: none;
   }
+  button, #pv { touch-action: manipulation; }
+  #pv { touch-action: pan-y; }
   body.green { background: #00ff00; }
   /* 舞台: 16:9 / 9:16 の比率を保ったまま窓に合わせて拡大縮小。余りは黒帯(グリーンバック時は緑) */
   #gl { position: fixed; left: 0; top: 0; display: block; }
@@ -2352,6 +2356,19 @@ window.addEventListener('keydown', (e) => {
 // ボタンにフォーカスが残ってSpaceで二重発火しないように
 document.querySelectorAll('button').forEach((b) => b.addEventListener('keydown', (e) => { const k = keyName(e); if (k === 'Space' || k === 'Enter') e.preventDefault(); }));
 window.addEventListener('resize', resize);
+// iOS Safari は viewport の拡大禁止を無視するため、ピンチとダブルタップ拡大を直接止める
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 350 && !e.target.closest('#pv select, #pv input')) {
+    e.preventDefault();
+    // preventDefault でクリックが消えるので、ボタン・PUSH・盤への連打はここで届ける
+    e.target.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY }));
+  }
+  lastTouchEnd = now;
+}, { passive: false });
 
 /* ---------- 起動 ---------- */
 (async () => {
