@@ -876,7 +876,8 @@ function warmGlossy() {
   const jobs = [['光リーチ', 'red'], ['光リーチ', 'gold'], ['光リーチ', 'rainbow'], ['闇リーチ', 'red'], ['闇リーチ', 'gold'], ['闇リーチ', 'rainbow'],
     ['激熱', 'red'], ['配信終了！', 'gold'], ['配信終了！', 'purple'],
     ['ボタンを押せ!!', 'red'], ['ボタンを押せ!!', 'gold'], ['ボタンを押せ!!', 'rainbow'], ['ボタンを連打!!', 'gold'], ['ボタンを連打!!', 'rainbow']];
-  const next = () => { const j = jobs.shift(); if (!j) return; getGlossy(...j); setTimeout(next, 60); };
+  // 最初のカットインだけ 0.1 秒ほど止まる(描画の初回準備)ので、見えないカットインを先に1回出しておく
+  const next = () => { const j = jobs.shift(); if (!j) { cutin('光リーチ', 't-gold', { dur: 900, gloss: 'gold', ghost: true }); return; } getGlossy(...j); setTimeout(next, 60); };
   setTimeout(next, 300);
 }
 
@@ -1441,9 +1442,10 @@ function phiFor(aT, from, minTurns) {
 
 /* ---------- DOM 演出 ---------- */
 const fxLayer = $('fx');
-function cutin(text, cls, { dur = 1400, sub = '', small = false, gloss = null } = {}) {
+function cutin(text, cls, { dur = 1400, sub = '', small = false, gloss = null, ghost = false } = {}) {
   const el = document.createElement('div');
   el.className = `cutin ${cls}${small ? ' small' : ''}`;
+  if (ghost) el.style.opacity = '0.001';
   el.style.setProperty('--d', `${dur}ms`);
   el.innerHTML = `<div class="band"></div><div class="wrap"><div class="main"></div>${sub ? '<div class="sub"></div>' : ''}</div>`;
   const main = el.querySelector('.main');
