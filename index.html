@@ -131,12 +131,24 @@
     animation: band var(--d) both; background: var(--band);
     box-shadow: 0 0 40px var(--glow), inset 0 6px 0 rgba(255,255,255,.35), inset 0 -6px 0 rgba(0,0,0,.35);
   }
+  /* 帯: 出現時に斜めの光沢が1回走る + 上下の縁取り + 横に流れる光の筋(流線) */
+  .cutin .band { overflow: hidden; }
   .cutin .band::after {
     content: ''; position: absolute; inset: 0;
-    background: repeating-linear-gradient(90deg, transparent 0 38px, rgba(255,255,255,.18) 38px 44px);
-    animation: lines .25s linear infinite;
+    background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.55) 50%, transparent 60%);
+    background-size: 250% 100%; animation: bandSweep 1.1s ease-in-out .15s both;
   }
-  @keyframes lines { to { background-position: -82px 0; } }
+  @keyframes bandSweep { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+  .cutin .band::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 8px; bottom: 8px;
+    border-top: 3px solid rgba(255,255,255,.55); border-bottom: 3px solid rgba(0,0,0,.3);
+  }
+  .cutin .band i {
+    position: absolute; left: 0; height: 3px; border-radius: 3px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.9), transparent);
+    animation: streak var(--sd) linear infinite;
+  }
+  @keyframes streak { from { transform: translateX(calc(-30 * var(--vw))); } to { transform: translateX(calc(130 * var(--vw))); } }
   .cutin.small .band { height: calc(18 * var(--vh)); margin-top: calc(-9 * var(--vh)); }
   .cutin .wrap { position: relative; animation: slam var(--d) both; text-align: center; }
   .cutin .main {
@@ -1438,6 +1450,17 @@ function cutin(text, cls, { dur = 1400, sub = '', small = false, gloss = null } 
   if (gloss) { main.classList.add('gl'); main.appendChild(glossy(text, gloss)); }
   else main.textContent = text;
   if (sub) el.querySelector('.sub').textContent = sub;
+  // 流線: 長さ・速さ・濃さをばらばらに(等間隔の縞にしない)
+  const band = el.querySelector('.band');
+  for (let i = 0, n = small ? 7 : 14; i < n; i++) {
+    const st = document.createElement('i');
+    st.style.top = `${5 + Math.random() * 90}%`;
+    st.style.width = `${8 + Math.random() * 22}%`;
+    st.style.setProperty('--sd', `${0.25 + Math.random() * 0.35}s`);
+    st.style.animationDelay = `${-Math.random()}s`;
+    st.style.opacity = 0.4 + Math.random() * 0.6;
+    band.appendChild(st);
+  }
   fxLayer.appendChild(el);
   setTimeout(() => el.remove(), dur + 50);
 }
