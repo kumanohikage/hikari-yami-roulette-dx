@@ -120,7 +120,7 @@
   #fx { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
   .cutin { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; }
   .cutin .band {
-    position: absolute; left: -10%; right: -10%; top: 50%; height: calc(36 * var(--vh)); margin-top: -18vh;
+    position: absolute; left: -10%; right: -10%; top: 50%; height: calc(36 * var(--vh)); margin-top: calc(-18 * var(--vh));
     animation: band var(--d) both; background: var(--band);
     box-shadow: 0 0 40px var(--glow), inset 0 6px 0 rgba(255,255,255,.35), inset 0 -6px 0 rgba(0,0,0,.35);
   }
@@ -130,7 +130,7 @@
     animation: lines .25s linear infinite;
   }
   @keyframes lines { to { background-position: -82px 0; } }
-  .cutin.small .band { height: calc(18 * var(--vh)); margin-top: -9vh; }
+  .cutin.small .band { height: calc(18 * var(--vh)); margin-top: calc(-9 * var(--vh)); }
   .cutin .wrap { position: relative; animation: slam var(--d) both; text-align: center; }
   .cutin .main {
     font-family: var(--heavy); line-height: 1.05; letter-spacing: .04em; white-space: nowrap;
@@ -285,7 +285,9 @@
   }
   #counter button:hover { background: rgba(255,255,255,.2); }
   #counter button.arm { background: #b91c1c; border-color: #fca5a5; color: #fff; font-size: 10px; }
-  body.ui-hidden #counter .ctl { display: none; }
+  #counter { display: none; }
+  body.show-count #counter { display: flex; }
+  body.ui-hidden #counter { display: none; }
 
   #credit {
     position: absolute; left: 16px; bottom: 6px; font: 700 11px 'Noto Sans JP', sans-serif;
@@ -295,8 +297,9 @@
   body.vertical #fx, body.vertical #result { bottom: calc(25 * var(--vh)); height: auto; }
   body.vertical #result .rbg { bottom: calc(-25 * var(--vh)); }
   body.vertical #steps { top: calc(37.5 * var(--vh)); }
-  body.vertical #btn-spin { bottom: calc(25 * var(--vh) + 8px); }
-  body.vertical #hint { bottom: calc(25 * var(--vh) - 18px); }
+  body.vertical #btn-spin { bottom: calc(25 * var(--vh) + 8px); font-size: 64px; padding: 26px 120px; border-width: 5px; }
+  body.vertical #btn-spin:active { transform: translateX(-50%) scale(.95); }
+  body.vertical #hint { bottom: calc(25 * var(--vh) - 22px); font-size: 14px; }
   body.vertical #push { right: calc(4 * var(--vw)); bottom: calc(27 * var(--vh)); }
 
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 700 16px sans-serif; z-index: 100; background: #000; }
@@ -314,6 +317,7 @@
     <div class="tools">
       <button class="tool" id="btn-greenscreen">🟩 <span id="gs-label">OBSグリーンバック</span></button>
       <button class="tool" id="btn-sound"><span id="sound-icon">🔊</span> <span id="sound-label">効果音 ON</span></button>
+      <button class="tool" id="btn-count" title="回転数を表示・編集">🔢 回転数</button>
       <button class="tool" id="btn-win-h" title="アドレスバーの無い16:9の窓を開く(ウィンドウキャプチャ用)">🪟 横窓</button>
       <button class="tool" id="btn-win-v" title="アドレスバーの無い9:16の窓を開く(ウィンドウキャプチャ用)">🪟 縦窓</button>
       <button class="tool" id="btn-hide">🙈 UIを隠す (H)</button>
@@ -1906,6 +1910,7 @@ function openCaptureWindow(v) {
 }
 $('btn-win-h').addEventListener('click', () => openCaptureWindow(false));
 $('btn-win-v').addEventListener('click', () => openCaptureWindow(true));
+$('btn-count').addEventListener('click', () => document.body.classList.toggle('show-count'));
 $('cnt-minus').addEventListener('click', () => setCount(spinCount - 1));
 $('cnt-plus').addEventListener('click', () => setCount(spinCount + 1));
 let resetArm = null;
