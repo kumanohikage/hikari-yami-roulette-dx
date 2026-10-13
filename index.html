@@ -620,15 +620,13 @@ class SoundEngine {
     this.tone(90, { dur: 0.5, g: 0.6, f2: 45 });
     [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => this.tone(f, { type: 'square', at: 0.08 + i * 0.05, dur: 0.3, g: 0.06 }));
   }
-  // 連打の1発: 低い打撃+金属のカチッ+押すほど上がる音程
+  // 連打の1発: ステップアップと同じ「ピロッ」を、押すたびに1段ずつ上げる
   mashHit(n) {
     if (!this.ready()) return;
-    this.tone(120, { dur: 0.18, g: 0.75, f2: 50 });
-    this.noise({ dur: 0.09, g: 0.5, f: 1800, type: 'lowpass' });
-    this.tone(1800, { type: 'square', dur: 0.04, g: 0.07, f2: 900 });
-    const f = 440 * Math.pow(2, n * 2 / 12);
-    this.tone(f, { type: 'sawtooth', dur: 0.16, g: 0.07 });
-    this.tone(f * 1.5, { type: 'square', dur: 0.12, g: 0.04 });
+    const base = [523.25, 659.25, 783.99, 987.77, 1174.66, 1396.91, 1567.98][Math.min(Math.max(n - 1, 0), 6)];
+    this.tone(base, { type: 'square', dur: 0.18, g: 0.1 });
+    this.tone(base * 1.5, { type: 'square', at: 0.05, dur: 0.2, g: 0.08 });
+    this.noise({ dur: 0.15, g: 0.18, f: 6000, q: 1 });
   }
   stopThud() {
     if (!this.ready()) return;
