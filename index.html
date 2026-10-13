@@ -1655,7 +1655,17 @@ async function startSpin() {
       do { idx = Math.floor(Math.random() * total); } while (Math.abs(mod(idx - winIndex + total / 2, total) - total / 2) < 2);
       stopAngle = (idx + rand(0.2, 0.8)) * arc;
     }
-    await spinTo(stopAngle, mode);
+    const spun = spinTo(stopAngle, mode);
+    if (!isEnd && !plan.restart) {
+      // 普通の継続は結果を出すタイミングを散らす: 止まった瞬間 / 食い気味 / 少し早め
+      const r = Math.random();
+      const lead = r < 0.5 ? 0 : r < 0.85 ? rand(0.1, 0.2) : rand(0.4, 0.6);
+      await sleep(SPIN_TIME * 1000 - lead * 1000);
+      await prelude;
+      spun.then(() => sound.stopThud());
+      return finish(isEnd, mode, false);
+    }
+    await spun;
     await prelude;
     sound.stopThud();
     if (plan.restart) {
@@ -1684,6 +1694,7 @@ async function startSpin() {
 }
 
 // リーチなしの回転(加速→長いブレーキ)
+const SPIN_TIME = 0.7 + 5.0;
 function spinTo(angle, mode) {
   const phi0 = phi, Ta = 0.7;
   const phiF = phiFor(angle, phi0, mode === 'light' ? 6 : 5);
