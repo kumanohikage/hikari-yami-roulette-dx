@@ -727,6 +727,7 @@ const END_TIER_W  = { blue: 4, green: 8, red: 28, gold: 28, zebra: 14, rainbow: 
 const FAKE_TIER_W = { blue: 52, green: 28, red: 15, gold: 4.5, zebra: 0.5 };
 const FAKE_REACH_RATE = { light: 0.30, dark: 0.20 }; // 継続時にガセリーチが起きる率
 const SUDDEN_RATE = 0.08;                            // 終了時にリーチなしでいきなり止まる率(一発告知)
+const ZENKAI_RATE = 0.05;                            // 終了時の全回転(超レア・確定)
 const FREEZE_RATE = 0.1;                             // 終了時のフリーズ(プレミア)
 const RESTART_RATE = { end: 0.12, cont: 0.01 };     // 継続に止まった後にフリーズ→再始動
 const UPGRADE_RATE = { end: 0.25, cont: 0.12 };     // 逆転リーチ(弱い色で始まって昇格)
@@ -740,7 +741,9 @@ function pickW(table) {
 }
 const chance = (p) => Math.random() < p;
 
+const zenkaiPlan = () => ({ zenkaiten: true, tier: 'rainbow', reachPath: ['rainbow'], pattern: 'straight', steps: 0, pseudo: 0, swarm: false, hold: 'rainbow', vibe: false, gimmick: false, gekiatsu: false, mash: false, gemEvents: [] });
 function planPresentation(isEnd, mode) {
+  if (isEnd && chance(ZENKAI_RATE)) return zenkaiPlan();
   if (isEnd && chance(FREEZE_RATE)) {
     return { freeze: true, tier: 'rainbow', reachPath: ['rainbow'], pattern: 'straight', steps: 0, pseudo: 0, swarm: false, hold: 'rainbow', vibe: false, gimmick: false, gekiatsu: false, mash: true, gemEvents: [{ at: 'start', kind: 'change', to: 'rainbow' }] };
   }
@@ -1027,7 +1030,7 @@ scene.add(bg);
 function makeCanvas(w, h = w) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 function canvasTex(c) { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
 
-function drawWheel(mode) {
+function drawWheel(mode, allWin = false) {
   const { total, winIndex } = MODES[mode];
   const S = 2048, c = S / 2, r = S / 2 - 6;
   const mapC = makeCanvas(S), emC = makeCanvas(S);
@@ -1039,7 +1042,7 @@ function drawWheel(mode) {
   for (let i = 0; i < total; i++) {
     // 数学の角度 a は 3D では反時計回り。キャンバスは y が下向きなので -a で描く。
     const a0 = i * arc, a1 = a0 + arc;
-    const win = i === winIndex;
+    const win = allWin || i === winIndex;
     const path = () => { const p = new Path2D(); p.moveTo(c, c); p.arc(c, c, r, -a0, -a1, true); p.closePath(); return p; };
     const p = path();
     let grad = m.createRadialGradient(c, c, r * 0.12, c, c, r);
@@ -1726,6 +1729,7 @@ async function startSpin() {
   else { landIdx = selectedIndex; landFrac = rand(0.15, 0.85); }
   const landAngle = (landIdx + landFrac) * arc;
 
+  if (plan.zenkaiten) { await zenkaiten(mode, landAngle); return finish(true, mode, true); }
   if (plan.freeze) await freezeFx();
   fx.bulb = 'spin';
   fx.ambientRate = AMB_SPIN;
@@ -1794,6 +1798,115 @@ async function startSpin() {
     return finish(isEnd, mode, false);
   }
   return runReach(plan, mode, isEnd, landAngle, prelude);
+}
+
+/* ---------------------------------------------------------------------
+ *  全回転(超レア・確定): ブラックアウト → キュイン → 盤に寄りながら高速回転し、
+ *  マスが1つずつ全部「終了」に変わる。元ネタはパチンコの全回転リーチ(回り出したら当たり確定)
+ * ------------------------------------------------------------------- */
+let zenOverlay = null;
+function buildZenOverlay(mode) {
+  removeZenOverlay();
+  const { total, winIndex } = MODES[mode];
+  const arc = TAU / total;
+  const tex = drawWheel(mode, true);
+  const mat = new THREE.MeshStandardMaterial({ map: tex.map, emissiveMap: tex.emissive, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.42, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: -2 });
+  const g = new THREE.Group();
+  const segs = Math.max(4, Math.round(256 / total));
+  for (let i = 0; i < total; i++) {
+    if (i === winIndex) continue;
+    // CircleGeometry の扇形は盤面テクスチャと同じ角度・UV で切り出せる
+    const m = new THREE.Mesh(new THREE.CircleGeometry(R, segs, i * arc, arc), mat);
+    m.position.z = 0.205; m.visible = false; m.userData.i = i;
+    g.add(m);
+  }
+  spinner.add(g);
+  zenOverlay = { g, mat, tex };
+}
+function removeZenOverlay() {
+  if (!zenOverlay) return;
+  spinner.remove(zenOverlay.g);
+  zenOverlay.g.children.forEach((m) => m.geometry.dispose());
+  zenOverlay.mat.dispose(); zenOverlay.tex.map.dispose(); zenOverlay.tex.emissive.dispose();
+  zenOverlay = null;
+}
+const zP = new THREE.Vector3(), zC = new THREE.Color();
+// 盤のふちから、回転方向(時計回り)に渦を巻いて飛ぶ虹の粒
+function emitZenkai(dt) {
+  const n = Math.floor(110 * dt + Math.random());
+  for (let i = 0; i < n; i++) {
+    const a = rand(0, TAU);
+    zP.set(Math.cos(a) * (R + 0.35), Math.sin(a) * (R + 0.35), 0.5);
+    wheelRoot.localToWorld(zP);
+    const sp = rand(5, 11);
+    zC.setHSL(Math.random(), 1, 0.55).multiplyScalar(2.2);
+    sparks.emit(zP.x, zP.y, zP.z, Math.sin(a) * sp + Math.cos(a) * 2, -Math.cos(a) * sp + Math.sin(a) * 2, rand(0, 3), zC, rand(0.15, 0.42), rand(0.6, 1.4), -2, 0.96);
+  }
+}
+// 変わったマスから噴き出す粒
+function sliceBurst(i, arc) {
+  const mid = (i + 0.5) * arc;
+  zP.set(Math.cos(mid) * R * 0.7, Math.sin(mid) * R * 0.7, 0.4);
+  spinner.localToWorld(zP);
+  for (let k = 0; k < 36; k++) {
+    const a = rand(0, TAU), sp = rand(3, 9);
+    zC.setHSL(k % 3 ? 0.12 : Math.random(), 1, 0.6).multiplyScalar(2.4);
+    sparks.emit(zP.x, zP.y, zP.z + 0.3, Math.cos(a) * sp, Math.sin(a) * sp, rand(1, 5), zC, rand(0.15, 0.4), rand(0.5, 1.1), -4, 0.95);
+  }
+}
+async function zenkaiten(mode, landAngle) {
+  const { total, winIndex } = MODES[mode];
+  const arc = TAU / total;
+  // 1) いつもどおり回り始める
+  setHold('blue');
+  fx.bulb = 'spin'; fx.ambientRate = AMB_SPIN;
+  sound.spinStart();
+  flash(mode === 'light' ? '#fff6d0' : '#c084fc', 0.35, 0.35);
+  const a0 = phi;
+  await play([
+    { dur: 0.7, p0: a0, p1: a0 + 3, ease: E.in2 },
+    { dur: 1.3, p0: a0 + 3, p1: a0 + 14.1, ease: (x) => x },
+  ]);
+  // 2) ブラックアウト: 急ブレーキ → 暗転・無音
+  sound.freeze();
+  fx.bulb = 'off'; fx.dimT = 1; fx.ambientRate = 0;
+  const b0 = phi;
+  await play([{ dur: 0.6, p0: b0, p1: b0 + 1.7, ease: E.outCubic }]);
+  buildZenOverlay(mode); // 暗転中に準備(ここで少し重くても見えない)
+  await sleep(1300);
+  // 3) キュイン → 宝石が虹 → 盤へ寄る
+  sound.kyuin(); flash('#fff', 0.8, 1); fx.shake = 1.6; fx.dimT = 0;
+  setHold('rainbow', true); setTier('rainbow');
+  // 盤に寄ると発光部分が画面いっぱいになって白飛びするので、全回転中は盤の光を控えめにする
+  fx.reachT = 0.6; fx.winT = 0.2; fx.bulb = 'win'; fx.cam = 'zenkai'; fx.zenkai = true; fx.faceGlowT = 0.7;
+  document.body.classList.add('reaching');
+  cutin('全回転', 't-rainbow', { dur: 1700, gloss: 'rainbow' });
+  // 4) 高速回転(速さが途切れないように 加速 / 一定 / 減速 で距離を配分) しながら全マスが終了に変わる
+  const c0 = phi, Ta = 0.8, Tc = 4.4, Td = 3.6;
+  const phiF = phiFor(landAngle, c0 + 55, 0);
+  const v = (phiF - c0) / (Ta / 2 + Tc + Td / 3);
+  const motion = play([
+    { dur: Ta, p0: c0, p1: c0 + v * Ta / 2, ease: E.in2 },
+    { dur: Tc, p0: c0 + v * Ta / 2, p1: c0 + v * (Ta / 2 + Tc), ease: (x) => x },
+    { dur: Td, p0: c0 + v * (Ta / 2 + Tc), p1: phiF, ease: E.outCubic },
+  ]);
+  await sleep(Ta * 1000 + 200);
+  // 針の位置から順番に、ぐるっと一周するように変える(闇は10マスずつ)
+  const order = [];
+  for (let k = 1; k < total; k++) order.push(mod(winIndex + k, total));
+  const waves = Math.min(order.length, 10);
+  const per = Math.ceil(order.length / waves);
+  for (let w = 0; w < waves; w++) {
+    const group = order.slice(w * per, (w + 1) * per);
+    for (const m of zenOverlay.g.children) if (group.includes(m.userData.i)) { m.visible = true; sliceBurst(m.userData.i, arc); }
+    sound.holdChange(Math.min(5, Math.floor(w / 2)));
+    flash('#fff', 0.2, 0.35); fx.shake = Math.max(fx.shake, 0.5);
+    await sleep(360);
+  }
+  sound.kakutei(); flash('#fff', 0.6, 0.9); fx.shake = 1.2;
+  await motion;
+  fx.zenkai = false;
+  sound.stopThud();
 }
 
 // リーチなしの回転(加速→長いブレーキ)
@@ -1971,6 +2084,7 @@ function closeResult() {
   if (!res.classList.contains('show')) return;
   res.classList.remove('show');
   fx.winT = 0; fx.bulb = 'idle'; fx.cam = 'base'; fx.faceGlowT = 1; fx.ambientRate = AMB_IDLE;
+  removeZenOverlay();
   setHold('blue');
 }
 
@@ -2025,6 +2139,11 @@ function camTarget(out, look) {
     const close = currentMode === 'light' ? 0.62 : 0.4;
     out.set(Math.sin(time * 0.4) * 0.6, p.y - 2.2, d * close);
     look.set(0, p.y - 1.4, 0);
+  } else if (fx.cam === 'zenkai') {
+    // 盤面すれすれまで寄って、ゆっくり回り込む
+    const a = time * 0.55;
+    out.set(Math.sin(a) * d * 0.16, -R * 0.55 + Math.cos(a * 0.7) * 0.7, d * 0.3);
+    look.set(Math.sin(a) * 0.6, R * 0.12, 0);
   } else if (fx.cam === 'win') {
     const a = Math.sin(time * 0.5) * 0.22;
     out.set(Math.sin(a) * d * 0.92, -0.4 + Math.sin(time * 0.7) * 0.4, Math.cos(a) * d * 0.92);
@@ -2159,10 +2278,12 @@ function frame(now) {
   updateConfetti(dt);
   updateSwarm(dt);
   updateGimmick(dt);
+  if (fx.zenkai) emitZenkai(dt);
+  if (zenOverlay) zenOverlay.mat.emissiveIntensity = fx.zenkai ? 0.3 + 0.2 * Math.abs(Math.sin(time * 8)) : 0.55 * fx.faceGlow;
 
   // カメラ
   camTarget(tmpV, tmpL);
-  const cr = fx.cam === 'reach' ? 2.0 : 2.6;
+  const cr = fx.cam === 'reach' ? 2.0 : fx.cam === 'zenkai' ? 1.7 : 2.6;
   camPos.lerp(tmpV, k(cr)); camLook.lerp(tmpL, k(cr));
   camera.position.copy(camPos);
   if (fx.shake > 0.01) camera.position.add(shakeV.set(rand(-1, 1), rand(-1, 1), 0).multiplyScalar(fx.shake * 0.35));
@@ -2221,7 +2342,7 @@ function buildPreviewPanel() {
     $('pv-end').className = pv.end ? 'on' : '';
     $('pv-cont').className = pv.end ? '' : 'on cont';
     opts($('pv-kind'), pv.end
-      ? [['reach', 'リーチ'], ['restart', '再始動'], ['freeze', 'フリーズ'], ['sudden', '一発告知(リーチなし)'], ['random', 'おまかせ']]
+      ? [['reach', 'リーチ'], ['restart', '再始動'], ['freeze', 'フリーズ'], ['zenkai', '全回転(超レア)'], ['sudden', '一発告知(リーチなし)'], ['random', 'おまかせ']]
       : [['reach', 'リーチ(ガセ)'], ['restart', '再始動(ガセ)'], ['normal', 'リーチなし'], ['random', 'おまかせ']]);
     // 虹は終了のときだけ(確定演出なので継続では選べない)
     const tiers = TIER_ORDER.filter((k) => pv.end || k !== 'rainbow');
@@ -2233,12 +2354,12 @@ function buildPreviewPanel() {
     const lv = reach ? TIERS[$v('pv-tier')].level : 0;
     document.querySelectorAll('#pv [data-r]').forEach((l) => l.classList.toggle('off', !reach || (l.contains($('pv-up')) && (k === 'restart' || lv < 3))));
     document.querySelectorAll('#pv [data-p]').forEach((l) => l.classList.toggle('off', !reach || lv < 3));
-    $('pv-at').closest('label').classList.toggle('off', k === 'restart' || k === 'freeze' || k === 'random' || $v('pv-hold') === 'blue');
+    $('pv-at').closest('label').classList.toggle('off', k === 'restart' || k === 'freeze' || k === 'random' || k === 'zenkai' || $v('pv-hold') === 'blue');
     // 選べないタイミングは外す
     const pts = !reach ? ['start', 'mid'] : lv >= 3 ? ['start', 'mid', 'reach', 'creep', 'push'] : ['start', 'mid', 'reach', 'creep'];
     [...$('pv-at').options].forEach((o) => { o.disabled = !pts.includes(o.value); });
     if (!pts.includes($v('pv-at'))) $('pv-at').value = pts[pts.length - 1];
-    ['pv-hold', 'pv-tease', 'pv-steps', 'pv-pseudo', 'pv-swarm'].forEach((id) => $(id).closest('label').classList.toggle('off', k === 'freeze' || k === 'random'));
+    ['pv-hold', 'pv-tease', 'pv-steps', 'pv-pseudo', 'pv-swarm'].forEach((id) => $(id).closest('label').classList.toggle('off', k === 'freeze' || k === 'random' || k === 'zenkai'));
   };
   $('pv-end').addEventListener('click', () => { pv.end = true; refresh(); });
   $('pv-cont').addEventListener('click', () => { pv.end = false; refresh(); });
@@ -2253,6 +2374,7 @@ function previewPlan(isEnd, mode) {
   const v = (id) => $(id).value, on = (id) => $(id).checked;
   const kind = v('pv-kind');
   if (kind === 'random') return planPresentation(isEnd, mode);
+  if (kind === 'zenkai') return zenkaiPlan();
   if (kind === 'freeze') {
     return { freeze: true, tier: 'rainbow', reachPath: ['rainbow'], pattern: 'straight', steps: 0, pseudo: 0, swarm: false, hold: 'rainbow', vibe: false, gimmick: false, gekiatsu: false, mash: true, gemEvents: [{ at: 'start', kind: 'change', to: 'rainbow' }] };
   }
