@@ -42,6 +42,9 @@
   #gl { position: fixed; left: 0; top: 0; display: block; }
   #stage { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; --vw: 19.2px; --vh: 10.8px; }
   #stage > * { position: absolute; }
+  /* 舞台そのものはクリックを素通しして、下のルーレット(canvas)に届ける */
+  #stage { pointer-events: none; }
+  #result, #counter { pointer-events: auto; }
 
   /* ---------- UI ---------- */
   #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; transition: opacity .4s; }
@@ -2123,6 +2126,22 @@ function resize() {
 $('tab-light').addEventListener('click', () => setMode('light'));
 $('tab-dark').addEventListener('click', () => setMode('dark'));
 $('btn-spin').addEventListener('click', startSpin);
+// ルーレット本体(盤・外枠・中央)をクリックしても回る。PUSH 待ちのときは PUSH として扱う
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+canvas.addEventListener('click', (e) => {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (!ray.intersectObjects([face, back, rim, rim2, hub], true).length) return;
+  if (pushResolve) pushResolve();
+  else startSpin();
+});
+canvas.addEventListener('mousemove', (e) => {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  canvas.style.cursor = !isSpinning && ray.intersectObjects([face, back, rim, rim2, hub], true).length ? 'pointer' : '';
+});
 $('push').querySelector('.pbtn').addEventListener('click', () => pushResolve && pushResolve());
 $('result').addEventListener('click', closeResult);
 $('result-x').addEventListener('click', (e) => { e.stopPropagation(); closeResult(); });
