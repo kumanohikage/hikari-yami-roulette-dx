@@ -594,6 +594,17 @@ class SoundEngine {
       this.tone(1400, { type: 'square', at: r * 0.32, dur: 0.3, g: 0.04, f2: 5200 });
     }
   }
+  tease() {
+    if (!this.ready()) return;
+    this.tone(600, { type: 'square', dur: 0.35, g: 0.06, f2: 1400 });
+    this.tone(1400, { type: 'triangle', at: 0.38, dur: 0.3, g: 0.08, f2: 500 });
+  }
+  upgrade() {
+    if (!this.ready()) return;
+    this.noise({ dur: 0.6, g: 0.55, f: 6000, f2: 1500, q: 0.6, type: 'highpass' });
+    this.tone(90, { dur: 0.5, g: 0.6, f2: 45 });
+    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => this.tone(f, { type: 'square', at: 0.08 + i * 0.05, dur: 0.3, g: 0.06 }));
+  }
   stopThud() {
     if (!this.ready()) return;
     this.tone(140, { type: 'triangle', dur: 0.12, g: 0.25, f2: 70 });
@@ -646,6 +657,9 @@ const FAKE_TIER_W = { blue: 52, green: 28, red: 15, gold: 4.5, zebra: 0.5 };
 const FAKE_REACH_RATE = { light: 0.30, dark: 0.20 }; // 継続時にガセリーチが起きる率
 const SUDDEN_RATE = 0.08;                            // 終了時にリーチなしでいきなり止まる率(一発告知)
 const FREEZE_RATE = 0.1;                             // 終了時のフリーズ(プレミア)
+const RESTART_RATE = { end: 0.12, cont: 0.01 };     // 継続に止まった後にフリーズ→再始動
+const UPGRADE_RATE = { end: 0.25, cont: 0.12 };     // 逆転リーチ(弱い色で始まって昇格)
+const TEASE_RATE = 0.15;                             // 宝石が震えるのに変わらない煽り
 
 function pickW(table) {
   const entries = Object.entries(table);
@@ -657,16 +671,26 @@ const chance = (p) => Math.random() < p;
 
 function planPresentation(isEnd, mode) {
   if (isEnd && chance(FREEZE_RATE)) {
-    return { freeze: true, tier: 'rainbow', pattern: 'straight', steps: 0, pseudo: 0, swarm: false, hold: 'rainbow', vibe: false, gimmick: false, gekiatsu: false };
+    return { freeze: true, tier: 'rainbow', reachPath: ['rainbow'], pattern: 'straight', steps: 0, pseudo: 0, swarm: false, hold: 'rainbow', vibe: false, gimmick: false, gekiatsu: false, gemEvents: [{ at: 'start', kind: 'change', to: 'rainbow' }] };
   }
+  // 再始動: いったんリーチなしで継続に止まり、フリーズ → 宝石が化ける → もう一度回ってリーチ
+  const restart = chance(isEnd ? RESTART_RATE.end : RESTART_RATE.cont);
   let tier = null;
-  if (isEnd) tier = chance(SUDDEN_RATE) ? null : pickW(END_TIER_W);
+  if (restart) tier = isEnd ? pickW({ red: 30, gold: 32, zebra: 18, rainbow: 20 }) : pickW({ red: 80, gold: 20 });
+  else if (isEnd) tier = chance(SUDDEN_RATE) ? null : pickW(END_TIER_W);
   else if (chance(FAKE_REACH_RATE[mode])) tier = pickW(FAKE_TIER_W);
   const lv = tier ? TIERS[tier].level : 0;
 
   let pattern;
   if (isEnd) pattern = tier ? (chance(0.3) ? 'revive' : 'straight') : 'sudden';
   else pattern = tier ? (chance(0.5) ? 'short' : 'pass') : 'normal';
+
+  // 逆転リーチ: 弱い色で始めて途中で本当の色へ(まれに2段階)
+  let reachPath = tier ? [tier] : [];
+  if (tier && lv >= 3 && !restart && chance(isEnd ? UPGRADE_RATE.end : UPGRADE_RATE.cont)) {
+    const start = chance(0.65) ? 'blue' : 'green';
+    reachPath = lv >= 4 && chance(0.35) ? [start, 'red', tier] : [start, tier];
+  }
 
   // ステップアップ(歩→香→銀→金→王)。5段目まで行けばアツい
   const steps = [
@@ -677,9 +701,9 @@ function planPresentation(isEnd, mode) {
   const pseudo = [
     () => (chance(0.05) ? 1 : 0), () => +chance(0.4), () => 1, () => 1 + chance(0.4), () => 2, () => 2 + chance(0.5), () => 3,
   ][lv]();
-  const swarm = chance([0.02, 0.05, 0.08, 0.2, 0.45, 0.6, 0.6][lv]);
+  const swarm = !restart && chance([0.02, 0.05, 0.08, 0.2, 0.45, 0.6, 0.6][lv]);
   const gimmick = chance([0, 0, 0.02, 0.15, 0.35, 0.5, 0.5][lv]);
-  const gekiatsu = (tier === 'gold' || tier === 'zebra') && chance(0.35);
+  const gekiatsu = (tier === 'gold' || tier === 'zebra') && reachPath.length === 1 && chance(0.35);
 
   // 保留: 当該の色。ゼブラ・虹保留は終了時のみ。リーチの色以下からたまに格上げされる
   let hold = 'blue';
@@ -692,7 +716,25 @@ function planPresentation(isEnd, mode) {
   const vibe = tier ? chance(isEnd ? 0.15 : 0.01) : false; // ブルブル
   const mash = lv >= 4 && chance(0.3);                      // PUSH が連打になる
 
-  return { freeze: false, tier, pattern, steps, pseudo, swarm, hold, vibe, gimmick, gekiatsu, mash };
+  // 宝石の色が変わるタイミング(熱い色ほど遅め)と、変わらない煽り
+  const gemEvents = [];
+  if (!restart) {
+    const pts = !tier ? ['start', 'mid'] : lv >= 3 ? ['start', 'mid', 'reach', 'creep', 'push'] : ['start', 'mid', 'reach', 'creep'];
+    const hi = TIER_ORDER.indexOf(hold);
+    const base = hi >= 3 ? { start: 10, mid: 20, reach: 20, creep: 25, push: 25 } : { start: 25, mid: 25, reach: 20, creep: 15, push: 15 };
+    const pickAt = (from = 0) => pickW(Object.fromEntries(pts.slice(from).map((k) => [k, base[k]])));
+    if (hi > 0) {
+      const at = pickAt();
+      const ai = pts.indexOf(at);
+      // まれに2段階: 先に途中の色へ
+      if (hi >= 2 && ai > 0 && chance(0.25)) gemEvents.push({ at: pts[Math.floor(Math.random() * ai)], kind: 'change', to: TIER_ORDER[Math.floor(rand(1, hi))] });
+      if (chance(0.3)) gemEvents.push({ at, kind: 'tease' });   // 煽り→失敗→成功の2段構え
+      gemEvents.push({ at, kind: 'change', to: hold });
+    }
+    if (chance(TEASE_RATE)) gemEvents.push({ at: pickAt(), kind: 'tease' });
+  }
+
+  return { freeze: false, restart, tier, reachPath, pattern, steps: restart ? 0 : steps, pseudo: restart ? 0 : pseudo, swarm, hold, vibe, gimmick, gekiatsu, mash, gemEvents };
 }
 
 /* ---------- つるつる文字(パチンコ文字風 SVG) ---------- */
@@ -1478,21 +1520,26 @@ function updateGem(dt) {
   if (holdVibe) pointerPivot.position.set(b.x + rand(-0.06, 0.06), b.y + rand(-0.04, 0.04), b.z);
   else pointerPivot.position.copy(b);
 }
-async function holdSequence(plan) {
-  holdVibe = false;
-  setHold('blue');
-  const target = TIER_ORDER.indexOf(plan.hold);
-  if (target > 0) {
-    await sleep(rand(450, 900));
-    // 一気に変わるか、一段はさむか
-    const path = target >= 2 && chance(0.4) ? [Math.floor(rand(1, target)), target] : [target];
-    for (const lv of path) {
-      setHold(TIER_ORDER[lv], true);
-      sound.holdChange(lv);
-      await sleep(600);
-    }
+// 予定された宝石の変化・煽りを、そのタイミングで実行する
+async function gemAt(plan, at) {
+  for (const ev of (plan.gemEvents || []).filter((e) => e.at === at)) {
+    if (ev.kind === 'tease') await gemTease();
+    else await gemChange(ev.to);
   }
-  if (plan.vibe) { await sleep(300); holdVibe = true; sound.buzz(); }
+}
+async function gemChange(key) {
+  setHold(key, true);
+  sound.holdChange(TIER_ORDER.indexOf(key));
+  await sleep(450);
+}
+// 光って震えるのに変わらない
+async function gemTease() {
+  const was = holdVibe;
+  holdVibe = true; gemPop = 0.6;
+  sound.tease();
+  await sleep(750);
+  holdVibe = was;
+  await sleep(250);
 }
 
 const KOMA = ['歩', '香', '銀', '金', '王'];
@@ -1583,40 +1630,81 @@ async function startSpin() {
   sound.spinStart();
   flash(mode === 'light' ? '#fff6d0' : '#c084fc', 0.35, 0.35);
 
-  holdSequence(plan);
+  holdVibe = false;
+  if (!plan.freeze) setHold('blue');
+  const t0 = performance.now();
+  sleep(600).then(() => gemAt(plan, 'start'));
   if (plan.pseudo) { await sleep(250); await pseudoSpins(plan.pseudo, mode); }
 
-  // 予告（ステップアップ / 駒群）
+  // 予告（ステップアップ / 駒群）→ 回転の途中で宝石
   const prelude = (async () => {
     await sleep(350);
     await stepUp(plan.steps, plan.tier);
     if (plan.swarm) { await sleep(150); launchSwarm(); fx.shake = Math.max(fx.shake, 0.3); }
+    const wait = 1900 - (performance.now() - t0);
+    if (wait > 0) await sleep(wait);
+    await gemAt(plan, 'mid');
   })();
 
-  const phi0 = phi;
-  const Ta = 0.7;
-
-  if (!tier) {
+  if (!tier || plan.restart) {
     // ----- リーチなし: 加速→長いブレーキ -----
-    const phiF = phiFor(landAngle, phi0, mode === 'light' ? 6 : 5);
-    const D = phiF - phi0;
-    const Da = D / 3.857, Td = 5.0;
-    await play([
-      { dur: Ta, p0: phi0, p1: phi0 + Da, ease: E.in2 },
-      { dur: Td, p0: phi0 + Da, p1: phiF, ease: E.outQuint },
-    ]);
+    let stopAngle = landAngle;
+    if (plan.restart) {
+      // 1回目は終了マスから離れた継続マスに止める
+      let idx;
+      do { idx = Math.floor(Math.random() * total); } while (Math.abs(mod(idx - winIndex + total / 2, total) - total / 2) < 2);
+      stopAngle = (idx + rand(0.2, 0.8)) * arc;
+    }
+    await spinTo(stopAngle, mode);
     await prelude;
     sound.stopThud();
+    if (plan.restart) {
+      // 止まった…と思ったら一瞬の間 → フリーズ → 宝石が化ける → 再始動
+      await sleep(400);
+      fx.bulb = 'off'; fx.dimT = 1; fx.ambientRate = 0;
+      sound.freeze();
+      await sleep(1700);
+      sound.kyuin(); flash('#fff', 0.7, 1); fx.shake = 1.4; fx.dimT = 0;
+      await gemChange(plan.hold);
+      if (plan.vibe) { holdVibe = true; sound.buzz(); }
+      await sleep(500);
+      fx.bulb = 'spin'; fx.ambientRate = 2.5;
+      sound.spinStart();
+      return runReach(plan, mode, isEnd, landAngle, null);
+    }
     if (isEnd) {
       // 一発告知: 静寂→ガコッ
       fx.bulb = 'off'; fx.dimT = 0.8; fx.ambientRate = 0;
       await sleep(700);
       sound.gata(); flash('#fff', 0.6, 1); fx.shake = 1;
+    } else {
+      // 普通に止まったときも一瞬の間(再始動と見分けがつかないように)
+      await sleep(800);
     }
     return finish(isEnd, mode, false);
   }
+  return runReach(plan, mode, isEnd, landAngle, prelude);
+}
 
-  // ----- リーチあり -----
+// リーチなしの回転(加速→長いブレーキ)
+function spinTo(angle, mode) {
+  const phi0 = phi, Ta = 0.7;
+  const phiF = phiFor(angle, phi0, mode === 'light' ? 6 : 5);
+  const D = phiF - phi0;
+  const Da = D / 3.857, Td = 5.0;
+  return play([
+    { dur: Ta, p0: phi0, p1: phi0 + Da, ease: E.in2 },
+    { dur: Td, p0: phi0 + Da, p1: phiF, ease: E.outQuint },
+  ]);
+}
+
+// リーチ演出つきの回転(今の位置から回し始める)
+async function runReach(plan, mode, isEnd, landAngle, prelude) {
+  const { total, winIndex } = MODES[mode];
+  const arc = TAU / total;
+  const tier = TIERS[plan.tier];
+  const path = plan.reachPath && plan.reachPath.length ? plan.reachPath : [plan.tier];
+  const phi0 = phi, Ta = 0.7;
   const holdGap = mode === 'light' ? 0.5 : 1.6;       // 終了マス手前で一旦止まる距離(マス)
   const creepDist = (mode === 'light' ? 1.3 : 9) * arc;
   const Tc = 3.2, Td = 4.3;
@@ -1632,23 +1720,47 @@ async function startSpin() {
     { dur: Tc, p0: phiPre, p1: phiHold, ease: E.herm(1.6, 0) },
   ]);
 
-  // リーチ発生
+  // リーチ発生(最初は path[0] の色)
   await sleep((Ta + Td - 0.9) * 1000);
-  await prelude;
-  setTier(plan.tier);
+  if (prelude) await prelude;
+  const first = TIERS[path[0]];
+  const reachText = mode === 'light' ? '光リーチ' : '闇リーチ';
+  setTier(path[0]);
   fx.reachT = 1; fx.bulb = 'reach'; fx.cam = 'reach'; fx.faceGlowT = 1.6;
   document.body.classList.add('reaching');
-  vignette(tier.hex, true);
+  vignette(first.hex, true);
   const hb = setInterval(() => sound.heartbeat(), 820);
   if (plan.gimmick) { dropGimmick(); await sleep(1000); }
-  flash(tier.hex === '#ffffff' ? '#fff' : tier.hex, 0.5, 0.7);
+  flash(first.hex === '#ffffff' ? '#fff' : first.hex, 0.5, 0.7);
   fx.shake = Math.max(fx.shake, 0.6);
-  sound.reach(tier.level);
-  cutin(mode === 'light' ? '光リーチ' : '闇リーチ', tier.cls, { dur: 1600, gloss: tier.gloss });
-  if (plan.tier === 'rainbow') sound.kakutei();
+  sound.reach(first.level);
+  cutin(reachText, first.cls, { dur: 1600, gloss: first.gloss });
+  if (path[0] === 'rainbow') sound.kakutei();
   if (plan.gekiatsu) setTimeout(() => cutin('激熱', 't-red', { dur: 1150, small: true, gloss: 'red' }), 1650);
 
+  // リーチ中: 宝石の変化と、逆転(色の昇格)
+  const during = (async () => {
+    await sleep(700);
+    await gemAt(plan, 'reach');
+    const steps = path.slice(1);
+    const gap = steps.length > 1 ? 950 : 1500;
+    let gemDone = false;
+    for (const key of steps) {
+      await sleep(gap);
+      if (!gemDone) { await gemAt(plan, 'creep'); gemDone = true; }
+      const t = TIERS[key];
+      setTier(key);
+      vignette(t.hex, true);
+      sound.upgrade();
+      flash('#fff', 0.45, 1); fx.shake = 1.2;
+      cutin(reachText, t.cls, { dur: 1100, gloss: t.gloss });
+      if (key === 'rainbow') sound.kakutei();
+    }
+    if (!gemDone) { await sleep(700); await gemAt(plan, 'creep'); }
+  })();
+
   await mainDone;
+  await during;
   fx.bulb = 'hold';
   tremble = Math.min(0.12 * arc, 0.01);
 
@@ -1657,6 +1769,7 @@ async function startSpin() {
   clearInterval(hb);
   tremble = 0;
   if (tier.level >= 3) { sound.pushHit(); flash(tier.hex === '#ffffff' ? '#fff' : tier.hex, 0.4, 0.8); fx.shake = 0.8; }
+  await gemAt(plan, 'push');
 
   // 終了マス入口からの差分を -π..π に収める(手前のマスは負、終了マス・次のマスは正)
   const target = phiB + mod(landAngle - winIndex * arc + Math.PI, TAU) - Math.PI;
