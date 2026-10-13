@@ -723,15 +723,16 @@ const TIERS = {
   rainbow: { cls: 't-rainbow', level: 6, hex: '#ffffff', gloss: 'rainbow' },
 };
 const TIER_ORDER = ['blue', 'green', 'red', 'gold', 'zebra', 'rainbow'];
-const END_TIER_W  = { blue: 4, green: 8, red: 28, gold: 28, zebra: 14, rainbow: 18 };
-const FAKE_TIER_W = { blue: 52, green: 28, red: 15, gold: 4.5, zebra: 0.5 };
+// 単発企画向け: 1回の企画中にレア演出に出会えるよう、プレミア系は高め
+const END_TIER_W  = { blue: 4, green: 8, red: 26, gold: 26, zebra: 15, rainbow: 21 };
+const FAKE_TIER_W = { blue: 50, green: 27, red: 16, gold: 6, zebra: 1 };
 const FAKE_REACH_RATE = { light: 0.30, dark: 0.20 }; // 継続時にガセリーチが起きる率
 const SUDDEN_RATE = 0.08;                            // 終了時にリーチなしでいきなり止まる率(一発告知)
-const ZENKAI_RATE = 0.05;                            // 終了時の全回転(超レア・確定)
-const FREEZE_RATE = 0.1;                             // 終了時のフリーズ(プレミア)
-const RESTART_RATE = { end: 0.12, cont: 0.01 };     // 継続に止まった後にフリーズ→再始動
-const UPGRADE_RATE = { end: 0.25, cont: 0.12 };     // 逆転リーチ(弱い色で始まって昇格)
-const TEASE_RATE = 0.15;                             // 宝石が震えるのに変わらない煽り
+const ZENKAI_RATE = 0.10;                            // 終了時の全回転(超レア・確定)
+const FREEZE_RATE = 0.15;                            // 終了時のフリーズ(プレミア)
+const RESTART_RATE = { end: 0.15, cont: 0.02 };     // 継続に止まった後にフリーズ→再始動
+const UPGRADE_RATE = { end: 0.30, cont: 0.15 };     // 逆転リーチ(弱い色で始まって昇格)
+const TEASE_RATE = 0.20;                             // 宝石が震えるのに変わらない煽り
 
 function pickW(table) {
   const entries = Object.entries(table);
@@ -787,7 +788,7 @@ function planPresentation(isEnd, mode) {
     const allowed = TIER_ORDER.slice(0, top + 1).filter((k) => isEnd || (k !== 'zebra' && k !== 'rainbow'));
     hold = chance(0.55) ? allowed[allowed.length - 1] : allowed[Math.floor(Math.random() * allowed.length)];
   }
-  const vibe = tier ? chance(isEnd ? 0.15 : 0.01) : false; // ブルブル
+  const vibe = tier ? chance(isEnd ? 0.2 : 0.02) : false; // ブルブル
   const mash = tier === 'rainbow' || (lv >= 4 && chance(0.3)); // PUSH が連打になる(虹は必ず)
 
   // 宝石の色が変わるタイミング(熱い色ほど遅め)と、変わらない煽り
