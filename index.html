@@ -1349,7 +1349,9 @@ function updateConfetti(dt) {
 }
 
 /* ---------- 駒群予告 ---------- */
-const PIECES = ['王', '飛', '角', '金', '銀', '桂', '香', '歩', '龍', '馬'];
+// 表の字と裏(成り)の字。本物どおり金・王は裏が無地、成り駒は赤字
+const PIECES = ['王', '飛', '角', '金', '銀', '桂', '香', '歩'];
+const PROMOTED = { 飛: '龍', 角: '馬', 銀: '全', 桂: '圭', 香: '杏', 歩: 'と' };
 const pieceGeo = (() => {
   const s = new THREE.Shape(), w = 0.72, h = 0.88;
   s.moveTo(-w / 2, -h / 2); s.lineTo(w / 2, -h / 2); s.lineTo(w * 0.4, h * 0.22); s.lineTo(0, h / 2); s.lineTo(-w * 0.4, h * 0.22); s.closePath();
@@ -1357,14 +1359,24 @@ const pieceGeo = (() => {
   g.translate(0, 0, -0.07); return g;
 })();
 const woodMat = new THREE.MeshStandardMaterial({ color: 0xe9c27c, roughness: 0.55, metalness: 0.05 });
-const kanjiTex = PIECES.map((ch, i) => drawKanji(ch, i >= 8));
+const kanjiTex = PIECES.map((ch) => drawKanji(ch, false));
+const backTex = PIECES.map((ch) => (PROMOTED[ch] ? drawKanji(PROMOTED[ch], true) : null));
+// 字の板を表と裏に貼る(裏は駒の背面から見て正しい向きになるよう Y 軸で裏返す)
+function addFaces(g, i) {
+  const k = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: kanjiTex[i], transparent: true }));
+  k.position.set(0, -0.05, 0.11);
+  g.add(k);
+  if (backTex[i]) {
+    const b = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: backTex[i], transparent: true }));
+    b.position.set(0, -0.05, -0.11); b.rotation.y = Math.PI;
+    g.add(b);
+  }
+}
 const swarm = [];
 for (let i = 0; i < 28; i++) {
   const g = new THREE.Group();
   g.add(new THREE.Mesh(pieceGeo, woodMat));
-  const k = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: kanjiTex[i % PIECES.length], transparent: true }));
-  k.position.set(0, -0.05, 0.11);
-  g.add(k);
+  addFaces(g, i % PIECES.length);
   g.visible = false;
   g.userData = { t: -1 };
   scene.add(g); swarm.push(g);
@@ -2398,11 +2410,12 @@ document.addEventListener('touchend', (e) => {
 (async () => {
   try {
     await Promise.race([
-      Promise.all([document.fonts.load(`100px 'Dela Gothic One'`, '終了継続光闇配信！リーチ激熱×234ボタンを押せ連打!'), document.fonts.load(`900 100px 'Noto Sans JP'`, '王飛角金銀桂香歩龍馬')]),
+      Promise.all([document.fonts.load(`100px 'Dela Gothic One'`, '終了継続光闇配信！リーチ激熱×234ボタンを押せ連打!'), document.fonts.load(`900 100px 'Noto Sans JP'`, '王飛角金銀桂香歩龍馬全圭杏と')]),
       sleep(2500),
     ]);
   } catch (_) { /* フォント無しでも続行 */ }
-  kanjiTex.forEach((t, i) => { const c = t.image; const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height); x.font = `900 200px 'Noto Sans JP', serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = i >= 8 ? '#b00000' : '#1a0d00'; x.fillText(PIECES[i], c.width / 2, c.height / 2 + 8); t.needsUpdate = true; });
+  const redraw = (t, ch, red) => { if (!t) return; const c = t.image; const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height); x.font = `900 200px 'Noto Sans JP', serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = red ? '#b00000' : '#1a0d00'; x.fillText(ch, c.width / 2, c.height / 2 + 8); t.needsUpdate = true; };
+  PIECES.forEach((ch, i) => { redraw(kanjiTex[i], ch, false); redraw(backTex[i], PROMOTED[ch], true); });
   setMode('light', true);
   setCount(spinCount);
   if (PREVIEW) buildPreviewPanel();
