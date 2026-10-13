@@ -390,6 +390,32 @@
   #push.vibe { animation: pvibe .05s linear infinite; }
   @keyframes pvibe { 25% { margin-left: -505px; margin-top: 2px; } 75% { margin-left: -495px; margin-top: -2px; } }
 
+  /* 演出確認モード(?preview) */
+  #pv-badge {
+    position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 90; pointer-events: none;
+    padding: 4px 14px; border-radius: 0 0 10px 10px; background: #c00; color: #fff;
+    font: 900 13px 'Noto Sans JP', sans-serif; letter-spacing: .08em; box-shadow: 0 2px 10px rgba(0,0,0,.5);
+  }
+  #pv {
+    position: fixed; right: 10px; top: 50%; transform: translateY(-50%); z-index: 80; width: 270px; max-height: calc(100% - 60px); overflow: auto;
+    padding: 10px 12px; border-radius: 12px; background: rgba(10,10,18,.88); border: 1px solid rgba(255,255,255,.2);
+    color: #eee; font: 700 12px 'Noto Sans JP', sans-serif; box-shadow: 0 6px 30px rgba(0,0,0,.6);
+  }
+  #pv.min > :not(.pv-head) { display: none; }
+  #pv .pv-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
+  #pv .pv-head button { background: none; border: 0; color: #aaa; cursor: pointer; font-size: 14px; }
+  #pv label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 5px 0; }
+  #pv label.off { opacity: .35; pointer-events: none; }
+  #pv select, #pv input[type=number] { width: 140px; font: 700 12px 'Noto Sans JP', sans-serif; background: #222; color: #fff; border: 1px solid #555; border-radius: 6px; padding: 3px 4px; }
+  #pv input[type=number] { width: 56px; }
+  #pv .seg { display: flex; gap: 4px; }
+  #pv .seg button { flex: 1; padding: 6px 0; border-radius: 7px; border: 1px solid #555; background: #222; color: #ccc; font: 900 12px 'Noto Sans JP', sans-serif; cursor: pointer; }
+  #pv .seg button.on { background: #b91c1c; border-color: #fca5a5; color: #fff; }
+  #pv .seg button.on.cont { background: #1d4ed8; border-color: #93c5fd; }
+  #pv hr { border: 0; border-top: 1px solid rgba(255,255,255,.15); margin: 8px 0; }
+  #pv .go { width: 100%; margin-top: 8px; padding: 9px 0; border-radius: 9px; border: 0; cursor: pointer; font: 900 15px 'Noto Sans JP', sans-serif; color: #fff; background: linear-gradient(#f59e0b, #ea580c); }
+  #pv .note { font-weight: 400; font-size: 10.5px; color: #aaa; line-height: 1.5; margin-top: 6px; }
+
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font: 700 16px sans-serif; z-index: 100; background: #000; }
   #loading.err { color: #fca5a5; padding: 24px; text-align: center; line-height: 1.7; }
 </style>
@@ -1645,12 +1671,13 @@ async function startSpin() {
   const arc = TAU / total;
 
   // ===== 抽選（ルールの本体）: 元の実装と同じく total 等分から一様に1マス選ぶ =====
-  const selectedIndex = Math.floor(Math.random() * total);
+  // 通常は元の抽選そのまま。?preview(演出確認モード)のときだけ、パネルで選んだ結果にする
+  const selectedIndex = PREVIEW ? previewIndex(total, winIndex) : Math.floor(Math.random() * total);
   const isEnd = selectedIndex === winIndex;
-  setCount(spinCount + 1);
+  if (!PREVIEW) setCount(spinCount + 1);
 
   // ===== ここから下は演出だけ。isEnd は二度と書き換えない =====
-  const plan = planPresentation(isEnd, mode);
+  const plan = PREVIEW ? previewPlan(isEnd, mode) : planPresentation(isEnd, mode);
   const tier = plan.tier ? TIERS[plan.tier] : null;
 
   // 止まる位置。継続マスはどれも同じ「継続」なので、ガセリーチ時は終了マスの隣に寄せて見せる。
@@ -2108,6 +2135,104 @@ function frame(now) {
 }
 
 // ?layout=vertical / ?layout=horizontal で固定。無ければ窓の形で自動
+/* ---------------------------------------------------------------------
+ *  演出確認モード(URL に ?preview)。結果と演出を選んで回せる。回転数は数えない
+ * ------------------------------------------------------------------- */
+const PREVIEW = new URLSearchParams(location.search).has('preview');
+const pv = { end: true };
+function previewIndex(total, winIndex) {
+  if (pv.end) return winIndex;
+  let i; do { i = Math.floor(Math.random() * total); } while (i === winIndex);
+  return i;
+}
+const PV_TIER_NAME = { blue: '青', green: '緑', red: '赤', gold: '金', zebra: 'ゼブラ', rainbow: '虹' };
+function buildPreviewPanel() {
+  document.title = '【演出確認】' + document.title;
+  document.body.insertAdjacentHTML('beforeend', `<div id="pv-badge">演出確認モード（抽選なし・回転数に数えない）</div>
+<div id="pv">
+  <div class="pv-head"><span>🎬 演出を選んで回す</span><button id="pv-min" title="たたむ">▁</button></div>
+  <div class="seg"><button id="pv-end" class="on">配信終了</button><button id="pv-cont">配信継続</button></div>
+  <label>種類 <select id="pv-kind"></select></label>
+  <label data-r>リーチの色 <select id="pv-tier"></select></label>
+  <label data-r>逆転 <select id="pv-up"><option value="0">なし</option><option value="1">青から1段</option><option value="2">青→赤→2段</option></select></label>
+  <label data-r>決着 <select id="pv-fin"></select></label>
+  <hr>
+  <label>宝石の色 <select id="pv-hold"></select></label>
+  <label data-g>変わる時 <select id="pv-at"><option value="start">開始直後</option><option value="mid">回転の途中</option><option value="reach">リーチ発生</option><option value="creep">リーチ中</option><option value="push">PUSHの時</option></select></label>
+  <label>煽り(震えるだけ) <input type="checkbox" id="pv-tease"></label>
+  <hr>
+  <label>ステップアップ <input type="number" id="pv-steps" min="0" max="5" value="0"></label>
+  <label>擬似連 <input type="number" id="pv-pseudo" min="0" max="3" value="0"></label>
+  <label>駒群予告 <input type="checkbox" id="pv-swarm"></label>
+  <label data-r>役物落下 <input type="checkbox" id="pv-gim"></label>
+  <label data-r>激熱テロップ <input type="checkbox" id="pv-geki"></label>
+  <label data-p>ブルブル <input type="checkbox" id="pv-vibe"></label>
+  <label data-p>連打 <input type="checkbox" id="pv-mash"></label>
+  <button class="go" id="pv-go">この内容で回す</button>
+  <div class="note">「おまかせ」は本番と同じ配分で演出だけ抽選します。Space でも回せます。<br>URL の ?preview を外すと通常モードに戻ります。</div>
+</div>`);
+  const $v = (id) => $(id).value;
+  const opts = (el, list) => { const cur = el.value; el.innerHTML = list.map(([v, t]) => `<option value="${v}">${t}</option>`).join(''); if (list.some(([v]) => v === cur)) el.value = cur; };
+  const refresh = () => {
+    $('pv-end').className = pv.end ? 'on' : '';
+    $('pv-cont').className = pv.end ? '' : 'on cont';
+    opts($('pv-kind'), pv.end
+      ? [['reach', 'リーチ'], ['restart', '再始動'], ['freeze', 'フリーズ'], ['sudden', '一発告知(リーチなし)'], ['random', 'おまかせ']]
+      : [['reach', 'リーチ(ガセ)'], ['restart', '再始動(ガセ)'], ['normal', 'リーチなし'], ['random', 'おまかせ']]);
+    // 虹は終了のときだけ(確定演出なので継続では選べない)
+    const tiers = TIER_ORDER.filter((k) => pv.end || k !== 'rainbow');
+    opts($('pv-tier'), tiers.map((k) => [k, PV_TIER_NAME[k]]));
+    opts($('pv-hold'), TIER_ORDER.filter((k) => pv.end || (k !== 'rainbow' && k !== 'zebra')).map((k) => [k, PV_TIER_NAME[k] + (k === 'blue' ? '(変わらない)' : '')]));
+    opts($('pv-fin'), pv.end ? [['straight', 'そのまま終了'], ['revive', '手前で止まって復活']] : [['short', '手前で止まる(ニアミス)'], ['pass', '通り過ぎる']]);
+    const k = $v('pv-kind');
+    const reach = k === 'reach' || k === 'restart';
+    const lv = reach ? TIERS[$v('pv-tier')].level : 0;
+    document.querySelectorAll('#pv [data-r]').forEach((l) => l.classList.toggle('off', !reach || (l.contains($('pv-up')) && (k === 'restart' || lv < 3))));
+    document.querySelectorAll('#pv [data-p]').forEach((l) => l.classList.toggle('off', !reach || lv < 3));
+    $('pv-at').closest('label').classList.toggle('off', k === 'restart' || k === 'freeze' || k === 'random' || $v('pv-hold') === 'blue');
+    // 選べないタイミングは外す
+    const pts = !reach ? ['start', 'mid'] : lv >= 3 ? ['start', 'mid', 'reach', 'creep', 'push'] : ['start', 'mid', 'reach', 'creep'];
+    [...$('pv-at').options].forEach((o) => { o.disabled = !pts.includes(o.value); });
+    if (!pts.includes($v('pv-at'))) $('pv-at').value = pts[pts.length - 1];
+    ['pv-hold', 'pv-tease', 'pv-steps', 'pv-pseudo', 'pv-swarm'].forEach((id) => $(id).closest('label').classList.toggle('off', k === 'freeze' || k === 'random'));
+  };
+  $('pv-end').addEventListener('click', () => { pv.end = true; refresh(); });
+  $('pv-cont').addEventListener('click', () => { pv.end = false; refresh(); });
+  $('pv-min').addEventListener('click', () => $('pv').classList.toggle('min'));
+  $('pv').addEventListener('change', refresh);
+  $('pv-go').addEventListener('click', () => { if (pushResolve) pushResolve(); else if ($('result').classList.contains('show')) closeResult(); else startSpin(); });
+  // パネル内の操作で Space が回転に化けないように
+  $('pv').addEventListener('keydown', (e) => e.stopPropagation());
+  refresh();
+}
+function previewPlan(isEnd, mode) {
+  const v = (id) => $(id).value, on = (id) => $(id).checked;
+  const kind = v('pv-kind');
+  if (kind === 'random') return planPresentation(isEnd, mode);
+  if (kind === 'freeze') {
+    return { freeze: true, tier: 'rainbow', reachPath: ['rainbow'], pattern: 'straight', steps: 0, pseudo: 0, swarm: false, hold: 'rainbow', vibe: false, gimmick: false, gekiatsu: false, mash: true, gemEvents: [{ at: 'start', kind: 'change', to: 'rainbow' }] };
+  }
+  const reach = kind === 'reach' || kind === 'restart';
+  const tier = reach ? v('pv-tier') : null;
+  const lv = tier ? TIERS[tier].level : 0;
+  const up = reach && kind !== 'restart' && lv >= 3 ? +v('pv-up') : 0;
+  const reachPath = !tier ? [] : up === 2 ? ['blue', 'red', tier] : up === 1 ? ['blue', tier] : [tier];
+  const hold = v('pv-hold');
+  const gemEvents = [];
+  if (kind !== 'restart') {
+    const at = v('pv-at');
+    if (on('pv-tease')) gemEvents.push({ at: hold === 'blue' ? 'mid' : at, kind: 'tease' });
+    if (hold !== 'blue') gemEvents.push({ at, kind: 'change', to: hold });
+  }
+  return {
+    freeze: false, restart: kind === 'restart', tier, reachPath,
+    pattern: reach ? v('pv-fin') : isEnd ? 'sudden' : 'normal',
+    steps: +v('pv-steps'), pseudo: +v('pv-pseudo'), swarm: on('pv-swarm'), hold,
+    vibe: lv >= 3 && on('pv-vibe'), gimmick: reach && on('pv-gim'), gekiatsu: reach && on('pv-geki'),
+    mash: tier === 'rainbow' || (lv >= 3 && on('pv-mash')), gemEvents,
+  };
+}
+
 const forcedLayout = new URLSearchParams(location.search).get('layout');
 let vertical = false, safeArea = false;
 function layoutStage() {
@@ -2239,6 +2364,7 @@ window.addEventListener('resize', resize);
   kanjiTex.forEach((t, i) => { const c = t.image; const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height); x.font = `900 200px 'Noto Sans JP', serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = i >= 8 ? '#b00000' : '#1a0d00'; x.fillText(PIECES[i], c.width / 2, c.height / 2 + 8); t.needsUpdate = true; });
   setMode('light', true);
   setCount(spinCount);
+  if (PREVIEW) buildPreviewPanel();
   warmGlossy();
   resize();
   camTarget(camPos, camLook);
