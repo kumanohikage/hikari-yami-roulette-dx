@@ -88,9 +88,13 @@ URL の末尾に `?preview` を付けると **演出確認モード** になり�
 |---|---|
 | 横配信（16:9） | https://kumanohikage.github.io/hikari-yami-roulette-dx/?layout=horizontal |
 | 縦配信（9:16） | https://kumanohikage.github.io/hikari-yami-roulette-dx/?layout=vertical |
+| 横・背景透過 | https://kumanohikage.github.io/hikari-yami-roulette-dx/?layout=horizontal&transparent |
+| 縦・背景透過 | https://kumanohikage.github.io/hikari-yami-roulette-dx/?layout=vertical&transparent |
 
 配信用URLは、窓やソースの大きさが半端でも中身の比率が崩れず、余った部分は黒帯になります。
 末尾に何も付けないURLは、画面いっぱいに広がる表示です（PC やスマホでそのまま遊ぶ用）。
+
+**背景を透過して重ねる（おすすめ）**：OBS のブラウザソースでは、URL に `&transparent` を付けると背景が本当に透明になります。光の粒やにじみもそのまま半透明で重なるので、グリーンバック＋クロマキーより綺麗です。グリーンバックは、サムネ素材づくりなど OBS 以外で切り抜きたいとき用に残しています。
 
 **A. ブラウザソース（おすすめ）**
 
