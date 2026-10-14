@@ -159,13 +159,13 @@
     font-family: var(--heavy); line-height: 1.05; letter-spacing: .04em; white-space: nowrap;
     font-size: min(calc(15 * var(--vw)), calc(21 * var(--vh)));
     background: var(--txt); -webkit-background-clip: text; background-clip: text; color: transparent;
-    -webkit-text-stroke: 3px rgba(0,0,0,.55);
-    filter: drop-shadow(0 0 18px var(--glow)) drop-shadow(0 6px 0 rgba(0,0,0,.5));
+    /* 縁取りは -webkit-text-stroke ではなく影の重ねで作る(iPhone Safari で角がトゲトゲにならないように) */
+    filter: drop-shadow(2px 0 0 rgba(0,0,0,.6)) drop-shadow(-2px 0 0 rgba(0,0,0,.6)) drop-shadow(0 2px 0 rgba(0,0,0,.6)) drop-shadow(0 -2px 0 rgba(0,0,0,.6)) drop-shadow(0 0 18px var(--glow)) drop-shadow(0 6px 0 rgba(0,0,0,.5));
   }
-  .cutin.small .main { font-size: min(calc(8 * var(--vw)), calc(11 * var(--vh))); -webkit-text-stroke: 2px rgba(0,0,0,.55); }
+  .cutin.small .main { font-size: min(calc(8 * var(--vw)), calc(11 * var(--vh))); }
   .cutin .sub {
     font-family: var(--heavy); font-size: min(calc(6 * var(--vw)), calc(8 * var(--vh))); color: #fff; margin-top: .2em;
-    -webkit-text-stroke: 2px rgba(0,0,0,.6); filter: drop-shadow(0 0 12px var(--glow));
+    filter: drop-shadow(2px 0 0 rgba(0,0,0,.7)) drop-shadow(-2px 0 0 rgba(0,0,0,.7)) drop-shadow(0 2px 0 rgba(0,0,0,.7)) drop-shadow(0 -2px 0 rgba(0,0,0,.7)) drop-shadow(0 0 12px var(--glow));
   }
   @keyframes band {
     0% { transform: skewY(-5deg) scaleY(0); opacity: 1; }
@@ -383,10 +383,11 @@
   #push.rainbow .pdome b { animation: hue 1.2s linear infinite; }
   #push .pdome b {
     font: normal 72px var(--heavy); color: #fff; letter-spacing: .02em; margin-top: 6px;
-    -webkit-text-stroke: 3px rgba(60,0,0,.7); text-shadow: 0 4px 0 rgba(0,0,0,.35), 0 0 18px rgba(255,255,255,.6);
+    --oc: rgba(60,0,0,.75);
+    text-shadow: 3px 0 0 var(--oc), -3px 0 0 var(--oc), 0 3px 0 var(--oc), 0 -3px 0 var(--oc), 2px 2px 0 var(--oc), -2px 2px 0 var(--oc), 2px -2px 0 var(--oc), -2px -2px 0 var(--oc), 0 6px 0 rgba(0,0,0,.35), 0 0 18px rgba(255,255,255,.6);
   }
-  #push.gold .pdome b { -webkit-text-stroke-color: rgba(90,50,0,.8); }
-  #push.zebra .pdome b, #push.rainbow .pdome b { -webkit-text-stroke-color: #000; }
+  #push.gold .pdome b { --oc: rgba(90,50,0,.8); }
+  #push.zebra .pdome b, #push.rainbow .pdome b { --oc: #000; }
   /* 押した瞬間: 沈む → 光る */
   #push.pressed .pbtn { animation: none; transform: perspective(900px) rotateX(32deg) translateY(14px) scale(.94); transition: transform .06s; }
   #push.pressed .pdome { filter: brightness(1.9); }
@@ -838,18 +839,38 @@ function renderGlossy(text, scheme) {
   const layer = () => { const c = makeCanvas(W, H), cx = c.getContext('2d'); setFont(cx); return [c, cx]; };
   const setFont = (cx) => { cx.font = `${fs}px 'Dela Gothic One', 'Noto Sans JP', sans-serif`; cx.textAlign = 'center'; cx.textBaseline = 'alphabetic'; cx.lineJoin = 'round'; cx.miterLimit = 2; };
   const [C, ctx] = layer();
+  // 太い縁取りは strokeText を使わず、文字を円周上にずらして塗り重ねて作る
+  // (iPhone Safari の strokeText は角がトゲトゲに飛び出すため)
+  const masks = {};
+  const dilate = (w) => {
+    if (masks[w]) return masks[w];
+    const [c2, x2] = layer();
+    x2.fillStyle = '#fff';
+    const r = w / 2, steps = 28;
+    for (const rr of [r, r * 0.7, r * 0.4]) for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * TAU;
+      x2.fillText(text, x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    x2.fillText(text, x, y);
+    return (masks[w] = c2);
+  };
+  const colored = (w, style) => {
+    const [c2, x2] = layer();
+    x2.drawImage(dilate(w), 0, 0);
+    x2.globalCompositeOperation = 'source-in';
+    x2.fillStyle = typeof style === 'function' ? style(x2) : style; x2.fillRect(0, 0, W, H);
+    return c2;
+  };
 
   // 厚み(押し出し)
-  for (let i = 10; i >= 1; i--) {
-    ctx.lineWidth = 40 * k; ctx.strokeStyle = g.ext; ctx.fillStyle = g.ext;
-    ctx.strokeText(text, x, y + i * 2.6 * k); ctx.fillText(text, x, y + i * 2.6 * k);
-  }
+  const extC = colored(40 * k, g.ext);
+  for (let i = 10; i >= 1; i--) ctx.drawImage(extC, 0, i * 2.6 * k);
   // 外側の黒縁 → メッキの縁
-  ctx.lineWidth = 40 * k; ctx.strokeStyle = '#0a0300'; ctx.strokeText(text, x, y);
-  ctx.lineWidth = 30 * k; ctx.strokeStyle = vgrad(ctx, g.rim); ctx.strokeText(text, x, y);
-  emboss(ctx, (cx) => { cx.lineWidth = 30 * k; cx.strokeText(text, x, y); }, 4 * k);
+  ctx.drawImage(colored(40 * k, '#0a0300'), 0, 0);
+  ctx.drawImage(colored(30 * k, (cx) => vgrad(cx, g.rim)), 0, 0);
+  emboss(ctx, (cx) => cx.drawImage(dilate(30 * k), 0, 0), 4 * k);
   // 内側の細い線 → 面
-  ctx.lineWidth = 9 * k; ctx.strokeStyle = g.line; ctx.strokeText(text, x, y);
+  ctx.drawImage(colored(9 * k, g.line), 0, 0);
   if (g.face) ctx.fillStyle = vgrad(ctx, g.face);
   else {
     const gr = ctx.createLinearGradient(x - W / 2, 0, x + W / 2, 0);
@@ -924,7 +945,7 @@ function glossy(text, scheme) {
 // 使う文字は決まっているので、起動後に少しずつ先に作っておく
 function warmGlossy() {
   const jobs = [['光リーチ', 'red'], ['光リーチ', 'gold'], ['光リーチ', 'rainbow'], ['闇リーチ', 'red'], ['闇リーチ', 'gold'], ['闇リーチ', 'rainbow'],
-    ['激熱', 'red'], ['配信終了！', 'gold'], ['配信終了！', 'purple'],
+    ['激熱', 'red'], ['配信終了!', 'gold'], ['配信終了!', 'purple'],
     ['ボタンを押せ!!', 'red'], ['ボタンを押せ!!', 'gold'], ['ボタンを押せ!!', 'rainbow'], ['ボタンを連打!!', 'gold'], ['ボタンを連打!!', 'rainbow']];
   // 最初のカットインだけ 0.1 秒ほど止まる(描画の初回準備)ので、見えないカットインを先に1回出しておく
   const next = () => { const j = jobs.shift(); if (!j) { cutin('光リーチ', 't-gold', { dur: 900, gloss: 'gold', ghost: true }); return; } getGlossy(...j); setTimeout(next, 60); };
@@ -2073,7 +2094,7 @@ function burst(mode, n) {
 function showResult(isEnd) {
   const res = $('result');
   const t = $('result-text');
-  if (isEnd) { t.textContent = ''; t.appendChild(glossy('配信終了！', currentMode === 'light' ? 'gold' : 'purple')); t.classList.add('gl'); }
+  if (isEnd) { t.textContent = ''; t.appendChild(glossy('配信終了!', currentMode === 'light' ? 'gold' : 'purple')); t.classList.add('gl'); }
   else { t.textContent = '配信継続！'; t.classList.remove('gl'); }
   res.classList.toggle('end', isEnd);
   // アニメーションを再生し直す
